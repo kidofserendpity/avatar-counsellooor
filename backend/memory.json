@@ -1,0 +1,168 @@
+{
+  "facts": [
+    "He has a coworker named Dave.",
+    "She works with Dave.",
+    "She knows someone named Dave.",
+    "They study in Owerri",
+    "Studies computer science",
+    "Lives in Owerri",
+    "Has school",
+    "Person has a long-distance friend."
+  ],
+  "journalFacts": [],
+  "visualFacts": [],
+  "lastMessageTimestamp": 1785237427497,
+  "crisisFlag": null,
+  "moodLog": [
+    {
+      "sentiment": "calm",
+      "timestamp": 1784323519776
+    },
+    {
+      "sentiment": "calm",
+      "timestamp": 1784323546492
+    },
+    {
+      "sentiment": "hopeful",
+      "timestamp": 1784323572359
+    },
+    {
+      "sentiment": "calm",
+      "timestamp": 1784324232514
+    },
+    {
+      "sentiment": "calm",
+      "timestamp": 1784324251270
+    },
+    {
+      "sentiment": "calm",
+      "timestamp": 1784324304387
+    },
+    {
+      "sentiment": "calm",
+      "timestamp": 1784324346221
+    },
+    {
+      "sentiment": "angry",
+      "timestamp": 1784324546275
+    },
+    {
+      "sentiment": "angry",
+      "timestamp": 1784325367021
+    },
+    {
+      "sentiment": "calm",
+      "timestamp": 1784326084573
+    },
+    {
+      "sentiment": "sad",
+      "timestamp": 1784326116532
+    },
+    {
+      "sentiment": "calm",
+      "timestamp": 1784326135367
+    },
+    {
+      "sentiment": "anxious",
+      "timestamp": 1784326140640
+    },
+    {
+      "sentiment": "calm",
+      "timestamp": 1784326290517
+    },
+    {
+      "sentiment": "calm",
+      "timestamp": 1784326338109
+    },
+    {
+      "sentiment": "calm",
+      "timestamp": 1784372406171
+    },
+    {
+      "sentiment": "sad",
+      "timestamp": 1784372463409
+    },
+    {
+      "sentiment": "anxious",
+      "timestamp": 1784372502981
+    },
+    {
+      "sentiment": "angry",
+      "timestamp": 1784373083341
+    },
+    {
+      "sentiment": "calm",
+      "timestamp": 1784492363236
+    },
+    {
+      "sentiment": "calm",
+      "timestamp": 1784530315453
+    },
+    {
+      "sentiment": "calm",
+      "timestamp": 1784535629725
+    },
+    {
+      "sentiment": "anxious",
+      "timestamp": 1784535644016
+    },
+    {
+      "sentiment": "calm",
+      "timestamp": 1784535652605
+    },
+    {
+      "sentiment": "angry",
+      "timestamp": 1784535841816
+    },
+    {
+      "sentiment": "angry",
+      "timestamp": 1784535983186
+    },
+    {
+      "sentiment": "sad",
+      "timestamp": 1784536005239
+    },
+    {
+      "sentiment": "anxious",
+      "timestamp": 1784536444635
+    },
+    {
+      "sentiment": "calm",
+      "timestamp": 1785073406266
+    },
+    {
+      "sentiment": "calm",
+      "timestamp": 1785145606388
+    },
+    {
+      "sentiment": "calm",
+      "timestamp": 1785145622055
+    },
+    {
+      "sentiment": "calm",
+      "timestamp": 1785145634539
+    },
+    {
+      "sentiment": "calm",
+      "timestamp": 1785145644444
+    },
+    {
+      "sentiment": "calm",
+      "timestamp": 1785237427497
+    }
+  ],
+  "styleProfile": {
+    "totalMessages": 34,
+    "length": {
+      "short": 21,
+      "medium": 12,
+      "long": 1
+    },
+    "humorCount": 0,
+    "formality": {
+      "casual": 27,
+      "neutral": 6,
+      "formal": 1
+    }
+  }
+}
