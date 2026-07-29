@@ -23,13 +23,11 @@ const {
   buildMemoryBlock,
   clearMemory
 } = require('./memory');
-const { loadJournal, saveJournal, addEntry, extractJournalFact } = require('./journal');
+const { loadJournal, saveJournal, clearJournal, addEntry, deleteEntry, setArchived, extractJournalFact } = require('./journal');
 
 const app = express();
 const PORT = process.env.PORT || 5000;
 
-// Fresh deploys don't have these folders yet — make sure they exist before
-// anything tries to read/write into them.
 fs.mkdirSync(path.join(__dirname, 'public', 'audio'), { recursive: true });
 fs.mkdirSync(path.join(__dirname, 'uploads'), { recursive: true });
 
@@ -39,38 +37,44 @@ app.use(cors());
 app.use(express.json());
 app.use('/audio', express.static(path.join(__dirname, 'public', 'audio')));
 
+function getUserId(req) {
+  return req.headers['x-user-id'] || req.body.userId || req.query.userId || 'anonymous';
+}
+
 app.get('/', (req, res) => {
   res.json({ message: 'Avatar Counsellor Backend is running!' });
 });
 
 app.get('/api/mood-history', (req, res) => {
-  const memory = loadMemory();
+  const userId = getUserId(req);
+  const memory = loadMemory(userId);
   res.json({ moodLog: memory.moodLog });
 });
 
 app.get('/api/journal', (req, res) => {
-  const entries = loadJournal();
+  const userId = getUserId(req);
+  const entries = loadJournal(userId);
   res.json({ entries });
 });
 
 app.post('/api/journal', async (req, res) => {
   try {
+    const userId = getUserId(req);
     const { text } = req.body;
     if (!text || !text.trim()) {
       return res.status(400).json({ error: 'Entry text is required' });
     }
 
-    const entries = loadJournal();
-    const { entries: updatedEntries, entry } = addEntry(entries, text.trim());
-    saveJournal(updatedEntries);
+    const { fact, category } = await extractJournalFact(text.trim());
 
-    extractJournalFact(text.trim())
-      .then((fact) => {
-        if (!fact) return;
-        const memory = loadMemory();
-        saveMemory(addJournalFact(memory, fact));
-      })
-      .catch((err) => console.error('Journal fact update failed:', err.message));
+    const entries = loadJournal(userId);
+    const { entries: updatedEntries, entry } = addEntry(entries, text.trim(), category);
+    saveJournal(userId, updatedEntries);
+
+    if (fact) {
+      const memory = loadMemory(userId);
+      saveMemory(userId, addJournalFact(memory, fact));
+    }
 
     res.json({ entry });
   } catch (error) {
@@ -79,13 +83,64 @@ app.post('/api/journal', async (req, res) => {
   }
 });
 
+app.patch('/api/journal/:id/archive', (req, res) => {
+  try {
+    const userId = getUserId(req);
+    const { archived } = req.body;
+    const entries = loadJournal(userId);
+    const updated = setArchived(entries, req.params.id, !!archived);
+    saveJournal(userId, updated);
+    res.json({ success: true });
+  } catch (error) {
+    console.error('Archive toggle error:', error.message);
+    res.status(500).json({ error: 'Could not update entry' });
+  }
+});
+
+app.delete('/api/journal/:id', (req, res) => {
+  try {
+    const userId = getUserId(req);
+    const entries = loadJournal(userId);
+    const updated = deleteEntry(entries, req.params.id);
+    saveJournal(userId, updated);
+    res.json({ success: true });
+  } catch (error) {
+    console.error('Journal entry delete error:', error.message);
+    res.status(500).json({ error: 'Could not delete entry' });
+  }
+});
+
+app.delete('/api/journal', (req, res) => {
+  try {
+    const userId = getUserId(req);
+    clearJournal(userId);
+    res.json({ cleared: true });
+  } catch (error) {
+    console.error('Clear journal error:', error.message);
+    res.status(500).json({ error: 'Could not clear journal' });
+  }
+});
+
 app.delete('/api/memory', (req, res) => {
   try {
-    const fresh = clearMemory();
+    const userId = getUserId(req);
+    const fresh = clearMemory(userId);
     res.json({ cleared: true, memory: fresh });
   } catch (error) {
     console.error('Clear memory error:', error.message);
     res.status(500).json({ error: 'Could not clear memory' });
+  }
+});
+
+app.delete('/api/reset-all', (req, res) => {
+  try {
+    const userId = getUserId(req);
+    clearMemory(userId);
+    clearJournal(userId);
+    res.json({ cleared: true });
+  } catch (error) {
+    console.error('Reset all error:', error.message);
+    res.status(500).json({ error: 'Could not reset' });
   }
 });
 
@@ -101,7 +156,7 @@ function generateCrisisAudioAndRespond(res, replyText, sentiment) {
   });
 }
 
-function recordMemoryAsync(userMessage, ariaReply, memory, sentiment) {
+function recordMemoryAsync(userId, userMessage, ariaReply, memory, sentiment) {
   extractMemoryAndStyle(userMessage, ariaReply)
     .then(({ fact, length, humor, formality }) => {
       let updated = memory;
@@ -109,23 +164,24 @@ function recordMemoryAsync(userMessage, ariaReply, memory, sentiment) {
       if (sentiment) updated = addMoodEntry(updated, sentiment);
       updated = updateStyle(updated, { length, humor, formality });
       updated.lastMessageTimestamp = Date.now();
-      saveMemory(updated);
+      saveMemory(userId, updated);
     })
     .catch((err) => console.error('Memory update failed:', err.message));
 }
 
 app.post('/api/chat', async (req, res) => {
   try {
+    const userId = getUserId(req);
     const { message, conversationHistory } = req.body;
     if (!message) {
       return res.status(400).json({ error: 'Message is required' });
     }
 
-    let memory = loadMemory();
+    let memory = loadMemory(userId);
     const checkin = consumeCrisisCheckIn(memory);
     memory = checkin.memory;
     const checkInNote = checkin.checkInNote;
-    if (checkInNote) saveMemory(memory);
+    if (checkInNote) saveMemory(userId, memory);
 
     const memoryBlock = buildMemoryBlock(memory, checkInNote);
 
@@ -134,7 +190,7 @@ app.post('/api/chat', async (req, res) => {
     if (explicitCheck.isCrisis) {
       const crisisReply = await getCrisisResponse(message, 'explicit', conversationHistory, memoryBlock);
       memory = setCrisisFlag(memory, message);
-      recordMemoryAsync(message, crisisReply, memory, 'sad');
+      recordMemoryAsync(userId, message, crisisReply, memory, 'sad');
       return generateCrisisAudioAndRespond(res, crisisReply, 'sad');
     }
 
@@ -143,11 +199,11 @@ app.post('/api/chat', async (req, res) => {
     if (contextCrisisDetected) {
       const crisisReply = await getCrisisResponse(message, 'ambiguous', conversationHistory, memoryBlock);
       memory = setCrisisFlag(memory, message);
-      recordMemoryAsync(message, crisisReply, memory, sentiment);
+      recordMemoryAsync(userId, message, crisisReply, memory, sentiment);
       return generateCrisisAudioAndRespond(res, crisisReply, sentiment);
     }
 
-    recordMemoryAsync(message, response, memory, sentiment);
+    recordMemoryAsync(userId, message, response, memory, sentiment);
 
     const audioFileName = `speech_${Date.now()}.mp3`;
     const audioFilePath = path.join(__dirname, 'public', 'audio', audioFileName);
@@ -167,6 +223,7 @@ app.post('/api/chat', async (req, res) => {
 
 app.post('/api/chat-image', upload.single('image'), async (req, res) => {
   try {
+    const userId = getUserId(req);
     if (!req.file) {
       return res.status(400).json({ error: 'Image is required' });
     }
@@ -190,16 +247,16 @@ app.post('/api/chat-image', upload.single('image'), async (req, res) => {
     const mimeType = req.file.mimetype || 'image/jpeg';
     fs.unlinkSync(req.file.path);
 
-    let memory = loadMemory();
+    let memory = loadMemory(userId);
     const checkin = consumeCrisisCheckIn(memory);
     memory = checkin.memory;
-    if (checkin.checkInNote) saveMemory(memory);
+    if (checkin.checkInNote) saveMemory(userId, memory);
     const memoryBlock = buildMemoryBlock(memory, checkin.checkInNote);
 
     if (caption && detectExplicitCrisis(caption).isCrisis) {
       const crisisReply = await getCrisisResponse(caption, 'explicit', conversationHistory, memoryBlock);
       memory = setCrisisFlag(memory, caption);
-      saveMemory(memory);
+      saveMemory(userId, memory);
       return generateCrisisAudioAndRespond(res, crisisReply, 'sad');
     }
 
@@ -208,13 +265,13 @@ app.post('/api/chat-image', upload.single('image'), async (req, res) => {
     extractVisualFact(base64Image, mimeType, caption)
       .then((fact) => {
         if (!fact) return;
-        const current = loadMemory();
-        saveMemory(addVisualFact(current, fact));
+        const current = loadMemory(userId);
+        saveMemory(userId, addVisualFact(current, fact));
       })
       .catch((err) => console.error('Visual fact save failed:', err.message));
 
     memory.lastMessageTimestamp = Date.now();
-    saveMemory(memory);
+    saveMemory(userId, memory);
 
     const audioFileName = `speech_${Date.now()}.mp3`;
     const audioFilePath = path.join(__dirname, 'public', 'audio', audioFileName);

@@ -10,9 +10,15 @@ import SettingsView from "./views/SettingsView";
 import BreatheView from "./views/BreatheView";
 import { theme } from "./theme";
 import { useIsMobile } from "./hooks/useIsMobile";
+import { getOrCreateUserId } from "./utils/userId";
 
 const API_BASE = import.meta.env.VITE_API_BASE_URL || "http://localhost:5000";
 const THEME_STORAGE_KEY = "aria-theme-mode";
+
+// Runs once when the app loads — every axios call anywhere in the app
+// automatically carries this header from here on, no per-call changes needed.
+const currentUserId = getOrCreateUserId();
+axios.defaults.headers.common['X-User-Id'] = currentUserId;
 
 function attachSilenceDetector(stream, onSilence, options = {}) {
   const { silenceThreshold = 0.02, silenceDuration = 1200, minSpeakingDuration = 700 } = options;

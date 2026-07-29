@@ -1,12 +1,22 @@
 const fs = require('fs');
 const path = require('path');
 
-const MEMORY_PATH = path.join(__dirname, 'memory.json');
+const MEMORY_DIR = path.join(__dirname, 'data', 'memory');
 const MAX_FACTS = 40;
 const MAX_JOURNAL_FACTS = 30;
 const MAX_VISUAL_FACTS = 30;
 const MAX_MOOD_LOG = 200;
 const NEW_SESSION_GAP_MS = 90 * 60 * 1000;
+
+function sanitizeUserId(userId) {
+  if (!userId || typeof userId !== 'string') return 'anonymous';
+  const cleaned = userId.replace(/[^a-zA-Z0-9-]/g, '');
+  return cleaned.slice(0, 64) || 'anonymous';
+}
+
+function getMemoryPath(userId) {
+  return path.join(MEMORY_DIR, `${sanitizeUserId(userId)}.json`);
+}
 
 function defaultMemory() {
   return {
@@ -25,9 +35,9 @@ function defaultMemory() {
   };
 }
 
-function loadMemory() {
+function loadMemory(userId) {
   try {
-    const raw = fs.readFileSync(MEMORY_PATH, 'utf-8');
+    const raw = fs.readFileSync(getMemoryPath(userId), 'utf-8');
     const parsed = JSON.parse(raw);
     const base = defaultMemory();
     return {
@@ -40,13 +50,14 @@ function loadMemory() {
   }
 }
 
-function saveMemory(memory) {
-  fs.writeFileSync(MEMORY_PATH, JSON.stringify(memory, null, 2));
+function saveMemory(userId, memory) {
+  fs.mkdirSync(MEMORY_DIR, { recursive: true });
+  fs.writeFileSync(getMemoryPath(userId), JSON.stringify(memory, null, 2));
 }
 
-function clearMemory() {
+function clearMemory(userId) {
   const fresh = defaultMemory();
-  saveMemory(fresh);
+  saveMemory(userId, fresh);
   return fresh;
 }
 

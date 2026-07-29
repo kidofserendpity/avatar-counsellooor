@@ -2,11 +2,24 @@ import { useEffect, useState, useCallback } from "react";
 import axios from "axios";
 import { theme } from "../theme";
 
+const CATEGORY_META = {
+  reflection: { label: "Reflection", icon: "🪞", color: "#9b6bff" },
+  gratitude: { label: "Gratitude", icon: "🙏", color: "#5eead4" },
+  venting: { label: "Venting", icon: "💢", color: "#d9776a" },
+  goal: { label: "Goal", icon: "🎯", color: "#f2b872" },
+  dream: { label: "Dream", icon: "💭", color: "#8b7aa8" },
+  memory: { label: "Memory", icon: "📷", color: "#c9b6ff" },
+  worry: { label: "Worry", icon: "🌧️", color: "#8b95a8" },
+  other: { label: "Other", icon: "📝", color: "#6b6578" }
+};
+
 function JournalView({ apiBase }) {
   const [entries, setEntries] = useState([]);
   const [draft, setDraft] = useState("");
   const [saving, setSaving] = useState(false);
   const [loaded, setLoaded] = useState(false);
+  const [categoryFilter, setCategoryFilter] = useState("all");
+  const [showArchived, setShowArchived] = useState(false);
 
   const loadEntries = useCallback(() => {
     axios.get(`${apiBase}/api/journal`)
@@ -31,7 +44,30 @@ function JournalView({ apiBase }) {
     }
   };
 
-  const sorted = [...entries].reverse();
+  const toggleArchive = async (id, currentlyArchived) => {
+    try {
+      await axios.patch(`${apiBase}/api/journal/${id}/archive`, { archived: !currentlyArchived });
+      loadEntries();
+    } catch (err) {
+      console.error("Archive toggle failed:", err);
+    }
+  };
+
+  const deleteEntry = async (id) => {
+    const confirmed = window.confirm("Delete this entry permanently? This can't be undone.");
+    if (!confirmed) return;
+    try {
+      await axios.delete(`${apiBase}/api/journal/${id}`);
+      loadEntries();
+    } catch (err) {
+      console.error("Delete entry failed:", err);
+    }
+  };
+
+  const visible = entries
+    .filter((e) => !!e.archived === showArchived)
+    .filter((e) => categoryFilter === "all" || e.category === categoryFilter)
+    .reverse();
 
   return (
     <div style={styles.wrap}>
@@ -53,19 +89,52 @@ function JournalView({ apiBase }) {
         </button>
       </div>
 
-      <div style={styles.sectionLabel}>PAST ENTRIES</div>
-      {loaded && sorted.length === 0 && (
-        <p style={styles.emptyState}>No entries yet — your first one starts the page above.</p>
+      <div style={styles.controlsRow}>
+        <select style={styles.filterSelect} value={categoryFilter} onChange={(e) => setCategoryFilter(e.target.value)}>
+          <option value="all">All categories</option>
+          {Object.entries(CATEGORY_META).map(([key, meta]) => (
+            <option key={key} value={key}>{meta.icon} {meta.label}</option>
+          ))}
+        </select>
+        <button
+          style={{ ...styles.archiveToggle, ...(showArchived ? styles.archiveToggleActive : {}) }}
+          onClick={() => setShowArchived((s) => !s)}
+        >
+          {showArchived ? "Showing archived" : "Show archived"}
+        </button>
+      </div>
+
+      {loaded && visible.length === 0 && (
+        <p style={styles.emptyState}>
+          {showArchived ? "No archived entries." : "Nothing here yet — your first one starts the page above."}
+        </p>
       )}
+
       <div style={styles.entryList}>
-        {sorted.map((entry) => (
-          <div key={entry.id} style={styles.entryCard}>
-            <div style={styles.entryDate}>
-              {new Date(entry.timestamp).toLocaleDateString(undefined, { weekday: "short", month: "short", day: "numeric" })}
+        {visible.map((entry) => {
+          const meta = CATEGORY_META[entry.category] || CATEGORY_META.other;
+          return (
+            <div key={entry.id} style={styles.entryCard}>
+              <div style={styles.entryHeader}>
+                <div style={{ ...styles.categoryChip, color: meta.color, borderColor: meta.color }}>
+                  {meta.icon} {meta.label}
+                </div>
+                <div style={styles.entryActions}>
+                  <button style={styles.iconButton} onClick={() => toggleArchive(entry.id, entry.archived)} title={entry.archived ? "Unarchive" : "Archive"}>
+                    {entry.archived ? "📤" : "🗄️"}
+                  </button>
+                  <button style={styles.iconButton} onClick={() => deleteEntry(entry.id)} title="Delete">
+                    🗑️
+                  </button>
+                </div>
+              </div>
+              <div style={styles.entryDate}>
+                {new Date(entry.timestamp).toLocaleDateString(undefined, { weekday: "short", month: "short", day: "numeric" })}
+              </div>
+              <p style={styles.entryText}>{entry.text}</p>
             </div>
-            <p style={styles.entryText}>{entry.text}</p>
-          </div>
-        ))}
+          );
+        })}
       </div>
     </div>
   );
@@ -77,7 +146,7 @@ const styles = {
   sub: { color: theme.muted, fontSize: "14px", marginTop: "6px", marginBottom: "24px", lineHeight: 1.5 },
   composer: {
     backgroundColor: theme.panel, border: `1px solid ${theme.border}`, borderRadius: "16px",
-    padding: "16px", display: "flex", flexDirection: "column", gap: "12px", marginBottom: "32px"
+    padding: "16px", display: "flex", flexDirection: "column", gap: "12px", marginBottom: "20px"
   },
   textarea: {
     resize: "vertical", backgroundColor: "transparent", border: "none", outline: "none",
@@ -88,12 +157,31 @@ const styles = {
     background: `linear-gradient(135deg, ${theme.rose}, ${theme.roseDeep})`,
     color: "#1c0f12", fontWeight: 600, border: "none", borderRadius: "10px", cursor: "pointer", fontSize: "14px"
   },
-  sectionLabel: { color: theme.mutedDim, fontSize: "12px", letterSpacing: "1.5px", marginBottom: "12px" },
+  controlsRow: { display: "flex", flexWrap: "wrap", gap: "10px", marginBottom: "16px", alignItems: "center" },
+  filterSelect: {
+    padding: "8px 12px", borderRadius: "10px", border: `1px solid ${theme.border}`,
+    backgroundColor: theme.bgElevated, color: theme.cream, fontSize: "13px"
+  },
+  archiveToggle: {
+    padding: "8px 14px", borderRadius: "999px", border: `1px solid ${theme.border}`,
+    backgroundColor: "transparent", color: theme.muted, fontSize: "13px", cursor: "pointer"
+  },
+  archiveToggleActive: { backgroundColor: theme.bgElevated, color: theme.purpleBright, borderColor: theme.purple },
   emptyState: { color: theme.mutedDim, fontSize: "13px" },
   entryList: { display: "flex", flexDirection: "column", gap: "12px" },
   entryCard: {
     backgroundColor: theme.bgElevated, border: `1px solid ${theme.border}`,
     borderRadius: "14px", padding: "16px 18px"
+  },
+  entryHeader: { display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: "8px" },
+  categoryChip: {
+    fontSize: "11px", padding: "3px 10px", borderRadius: "999px", border: "1px solid",
+    display: "inline-block", letterSpacing: "0.3px"
+  },
+  entryActions: { display: "flex", gap: "4px" },
+  iconButton: {
+    background: "transparent", border: "none", cursor: "pointer", fontSize: "14px",
+    padding: "4px 6px", borderRadius: "6px", color: theme.mutedDim
   },
   entryDate: { color: theme.mutedDim, fontSize: "11px", letterSpacing: "0.5px", marginBottom: "8px", textTransform: "uppercase" },
   entryText: { color: theme.cream, fontSize: "14px", lineHeight: 1.6, margin: 0, whiteSpace: "pre-wrap" }
