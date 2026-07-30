@@ -26,11 +26,11 @@ function HomeView({ apiBase, onNavigate }) {
       .catch(() => setEntries([]));
   }, [apiBase]);
 
-  const recent = entries.slice(-3).reverse();
+  const recent = entries.filter((e) => !e.archived).slice(-3).reverse();
 
   return (
     <div style={styles.wrap}>
-      <h1 style={styles.greeting}>{getGreeting()}.</h1>
+      <h1 style={{ ...styles.greeting, ...theme.gradientText }}>{getGreeting()}.</h1>
       <p style={styles.sub}>Whatever's on your mind, there's room for it here.</p>
 
       <div style={styles.sectionLabel}>YOUR SPACE</div>
@@ -65,7 +65,7 @@ function HomeView({ apiBase, onNavigate }) {
 
 const styles = {
   wrap: { maxWidth: "760px", width: "100%", boxSizing: "border-box" },
-  greeting: { fontFamily: theme.serif, fontSize: "34px", color: theme.cream, margin: 0 },
+  greeting: { fontFamily: theme.serif, fontWeight: 600, fontSize: "34px", margin: 0 },
   sub: { color: theme.muted, fontSize: "14px", marginTop: "6px", marginBottom: "32px" },
   sectionLabel: { color: theme.mutedDim, fontSize: "12px", letterSpacing: "1.5px", marginBottom: "12px", marginTop: "28px" },
   cardGrid: { display: "flex", gap: "14px" },

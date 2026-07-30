@@ -1,3 +1,5 @@
+@import url('https://fonts.googleapis.com/css2?family=Fraunces:opsz,wght@9..144,400;9..144,600&family=Inter:wght@400;500;600;700&display=swap');
+
 :root {
   --bg: #0b0a10;
   --bg-elevated: #151320;
@@ -20,8 +22,8 @@
   --accent: var(--accent-purple);
   --shadow: rgba(0, 0, 0, 0.4) 0 10px 15px -3px, rgba(0, 0, 0, 0.25) 0 4px 6px -2px;
 
-  --sans: system-ui, 'Segoe UI', Roboto, sans-serif;
-  --heading: Georgia, 'Iowan Old Style', 'Palatino Linotype', 'Book Antiqua', serif;
+  --sans: 'Inter', system-ui, 'Segoe UI', Roboto, sans-serif;
+  --heading: 'Fraunces', Georgia, 'Iowan Old Style', serif;
   --mono: ui-monospace, Consolas, monospace;
 
   font: 16px/145% var(--sans);
@@ -135,6 +137,16 @@ button:focus-visible {
 @keyframes orbSee {
   0%, 100% { opacity: 0.7; transform: scale(1); }
   50% { opacity: 1; transform: scale(1.04); }
+}
+
+@keyframes auroraDriftA {
+  0%, 100% { transform: translate(-10%, -10%) scale(1); }
+  50% { transform: translate(10%, 5%) scale(1.15); }
+}
+
+@keyframes auroraDriftB {
+  0%, 100% { transform: translate(10%, 10%) scale(1); }
+  50% { transform: translate(-8%, -12%) scale(1.1); }
 }
 
 @media (prefers-reduced-motion: reduce) {

@@ -2,6 +2,7 @@ import { useState, useRef, useEffect } from "react";
 import axios from "axios";
 import Sidebar from "./components/Sidebar";
 import BottomNav from "./components/BottomNav";
+import LiveSessionPrompt from "./components/LiveSessionPrompt";
 import HomeView from "./views/HomeView";
 import TalkView from "./views/TalkView";
 import JournalView from "./views/JournalView";
@@ -10,15 +11,13 @@ import SettingsView from "./views/SettingsView";
 import BreatheView from "./views/BreatheView";
 import { theme } from "./theme";
 import { useIsMobile } from "./hooks/useIsMobile";
-import { getOrCreateUserId } from "./utils/userId";
+import { refreshUserIdHeader } from "./utils/userId";
 
 const API_BASE = import.meta.env.VITE_API_BASE_URL || "http://localhost:5000";
 const THEME_STORAGE_KEY = "aria-theme-mode";
+const LIVE_PROMPT_KEY = "aria-live-prompt-dismissed";
 
-// Runs once when the app loads — every axios call anywhere in the app
-// automatically carries this header from here on, no per-call changes needed.
-const currentUserId = getOrCreateUserId();
-axios.defaults.headers.common['X-User-Id'] = currentUserId;
+refreshUserIdHeader();
 
 function attachSilenceDetector(stream, onSilence, options = {}) {
   const { silenceThreshold = 0.02, silenceDuration = 1200, minSpeakingDuration = 700 } = options;
@@ -83,6 +82,14 @@ function App() {
   const [speaking, setSpeaking] = useState(false);
   const [liveMode, setLiveMode] = useState(false);
 
+  const [showLivePrompt, setShowLivePrompt] = useState(() => {
+    try {
+      return localStorage.getItem(LIVE_PROMPT_KEY) !== "true";
+    } catch {
+      return true;
+    }
+  });
+
   const [themeMode, setThemeMode] = useState(() => {
     try {
       return localStorage.getItem(THEME_STORAGE_KEY) || "dark";
@@ -101,6 +108,9 @@ function App() {
   const loadingRef = useRef(loading);
   const speakingRef = useRef(speaking);
   const imageLoadingRef = useRef(imageLoading);
+  const abortControllerRef = useRef(null);
+  const requestIdRef = useRef(0);
+  const pendingInterruptRef = useRef(false);
 
   useEffect(() => { conversationRef.current = conversation; }, [conversation]);
   useEffect(() => { liveModeRef.current = liveMode; }, [liveMode]);
@@ -118,6 +128,17 @@ function App() {
     }
   }, [themeMode]);
 
+  const handleLiveChoice = (startLive, dontAskAgain) => {
+    if (dontAskAgain) {
+      try { localStorage.setItem(LIVE_PROMPT_KEY, "true"); } catch { /* ignore */ }
+    }
+    setShowLivePrompt(false);
+    if (startLive) {
+      setActiveView("talk");
+      setLiveMode(true);
+    }
+  };
+
   const speak = (audioUrl) => {
     if (!audioUrl) return;
     if (!audioRef.current) {
@@ -133,9 +154,31 @@ function App() {
     });
   };
 
+  // Cuts off whatever Aria is currently doing (talking or musing) and marks
+  // the next message as an interruption, without needing to send anything yet.
+  const stopAria = () => {
+    if (audioRef.current) audioRef.current.pause();
+    if (abortControllerRef.current) abortControllerRef.current.abort();
+    requestIdRef.current += 1;
+    setSpeaking(false);
+    setLoading(false);
+    pendingInterruptRef.current = true;
+  };
+
   const sendMessage = async (overrideText) => {
     const textToSend = (overrideText ?? message).trim();
     if (!textToSend) return;
+
+    const interrupted = speakingRef.current || loadingRef.current || pendingInterruptRef.current;
+    pendingInterruptRef.current = false;
+
+    if (audioRef.current) audioRef.current.pause();
+    if (abortControllerRef.current) abortControllerRef.current.abort();
+    setSpeaking(false);
+
+    const controller = new AbortController();
+    abortControllerRef.current = controller;
+    const myRequestId = ++requestIdRef.current;
 
     setMessage("");
     setLoading(true);
@@ -146,8 +189,11 @@ function App() {
     try {
       const res = await axios.post(`${API_BASE}/api/chat`, {
         message: textToSend,
-        conversationHistory: conversationRef.current
-      });
+        conversationHistory: conversationRef.current,
+        interrupted
+      }, { signal: controller.signal });
+
+      if (myRequestId !== requestIdRef.current) return;
 
       const aiResponse = res.data.response;
       const isCrisis = res.data.isCrisis;
@@ -157,9 +203,10 @@ function App() {
       setSentiment(res.data.sentiment || "calm");
       speak(audioUrl);
     } catch (error) {
+      if (axios.isCancel(error) || error.code === "ERR_CANCELED") return;
       console.error("Error:", error);
     } finally {
-      setLoading(false);
+      if (myRequestId === requestIdRef.current) setLoading(false);
     }
   };
 
@@ -271,7 +318,7 @@ function App() {
   const talkProps = {
     message, setMessage, conversation, loading, recording, sentiment, speaking,
     sendMessage, startRecording, stopRecording, liveMode, onToggleLive: setLiveMode,
-    imageLoading, sendImage
+    imageLoading, sendImage, onStopAria: stopAria
   };
 
   const renderView = () => {
@@ -287,17 +334,30 @@ function App() {
 
   return (
     <div style={styles.shell}>
+      <div style={styles.auroraA} />
+      <div style={styles.auroraB} />
       {!isMobile && <Sidebar activeView={activeView} onNavigate={setActiveView} />}
       <main style={{ ...styles.main, padding: isMobile ? "20px 16px 90px" : "36px 48px" }}>
         {renderView()}
       </main>
       {isMobile && <BottomNav activeView={activeView} onNavigate={setActiveView} />}
+      {showLivePrompt && <LiveSessionPrompt onChoose={handleLiveChoice} />}
     </div>
   );
 }
 
 const styles = {
-  shell: { display: "flex", minHeight: "100vh", backgroundColor: theme.bg, fontFamily: theme.sans },
+  shell: { position: "relative", display: "flex", minHeight: "100vh", backgroundColor: theme.bg, fontFamily: theme.sans, overflow: "hidden" },
+  auroraA: {
+    position: "fixed", top: "-20%", left: "-10%", width: "60vw", height: "60vw", borderRadius: "50%",
+    background: `radial-gradient(circle, var(--accent-purple), transparent 70%)`, opacity: 0.2,
+    filter: "blur(60px)", animation: "auroraDriftA 22s ease-in-out infinite", pointerEvents: "none", zIndex: -1
+  },
+  auroraB: {
+    position: "fixed", bottom: "-20%", right: "-10%", width: "55vw", height: "55vw", borderRadius: "50%",
+    background: `radial-gradient(circle, var(--accent-teal), transparent 70%)`, opacity: 0.15,
+    filter: "blur(70px)", animation: "auroraDriftB 26s ease-in-out infinite", pointerEvents: "none", zIndex: -1
+  },
   main: { flex: 1, boxSizing: "border-box", minHeight: "100vh", overflowY: "auto" }
 };
 

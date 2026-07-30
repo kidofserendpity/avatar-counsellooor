@@ -27,10 +27,10 @@ function formatElapsed(seconds) {
 function TalkView({
   message, setMessage, conversation, loading, recording, sentiment, speaking,
   sendMessage, startRecording, stopRecording, liveMode, onToggleLive,
-  imageLoading, sendImage
+  imageLoading, sendImage, onStopAria
 }) {
   const isMobile = useIsMobile();
-  const [showTranscript, setShowTranscript] = useState(true);
+  const [showTranscript, setShowTranscript] = useState(false);
   const [elapsed, setElapsed] = useState(0);
   const [dragActive, setDragActive] = useState(false);
   const [absorbPreview, setAbsorbPreview] = useState(null);
@@ -124,6 +124,14 @@ function TalkView({
     setDragActive(false);
   };
 
+  const handleOrbTap = () => {
+    if (recording) {
+      stopRecording();
+    } else if (!loading && !imageLoading) {
+      startRecording(false);
+    }
+  };
+
   const orbState = imageLoading ? "seeing" : speaking ? "speaking" : recording ? "listening" : loading ? "thinking" : "idle";
   const orbAnimation =
     orbState === "idle" ? "orbBreathe 4.5s ease-in-out infinite" :
@@ -133,9 +141,11 @@ function TalkView({
   const liveStatusLabel = !liveMode
     ? null
     : recording ? "Live — listening"
-    : loading ? "Live — thinking"
-    : speaking ? "Live — Aria's speaking"
+    : loading ? "Live — musing"
+    : speaking ? "Live — A.R.I.A's speaking"
     : "Live — waiting";
+
+  const canInterrupt = speaking || loading;
 
   return (
     <div style={styles.wrap} onDrop={handleDrop} onDragOver={handleDragOver} onDragLeave={handleDragLeave}>
@@ -160,7 +170,10 @@ function TalkView({
         </div>
       </div>
 
-      <div style={{ ...styles.orbStage, width: `${orbSize}px`, height: `${orbSize}px` }}>
+      <div
+        style={{ ...styles.orbStage, width: `${orbSize}px`, height: `${orbSize}px`, cursor: "pointer" }}
+        onClick={handleOrbTap}
+      >
         <div
           style={{
             ...styles.orbRing,
@@ -185,15 +198,19 @@ function TalkView({
         {orbState === "listening" && <div style={styles.listenRing} />}
         {speaking && <div style={styles.pulseRing} />}
         {dragActive && <div style={styles.dragRing} />}
-        {dragActive && <p style={styles.dragLabel}>Drop to show Aria</p>}
+        {dragActive && <p style={styles.dragLabel}>Drop to show A.R.I.A</p>}
         {absorbPreview && (
-          <img key={absorbPreview.key} src={absorbPreview.url} alt="Sending to Aria" style={styles.absorbImage} />
+          <img key={absorbPreview.key} src={absorbPreview.url} alt="Sending to A.R.I.A" style={styles.absorbImage} />
         )}
       </div>
 
       <p style={styles.stateLabel}>
-        {liveStatusLabel || (imageLoading ? "Looking at that…" : recording ? "Listening…" : loading ? "Thinking…" : speaking ? "Speaking…" : "Tap to speak")}
+        {liveStatusLabel || (imageLoading ? "Looking at that…" : recording ? "Listening…" : loading ? "Musing…" : speaking ? "Speaking…" : "Tap the orb to speak")}
       </p>
+
+      {canInterrupt && (
+        <button style={styles.stopButton} onClick={onStopAria}>⏹ Stop</button>
+      )}
 
       {showTranscript && (
         <div style={{ ...styles.chatBox, height: isMobile ? "260px" : "300px" }}>
@@ -305,7 +322,11 @@ const styles = {
     borderRadius: "14px", boxShadow: "0 8px 24px rgba(0,0,0,0.4)",
     animation: "imageAbsorb 0.65s ease-in forwards", zIndex: 5, pointerEvents: "none"
   },
-  stateLabel: { color: theme.mutedDim, fontSize: "12px", letterSpacing: "1px", textTransform: "uppercase", marginBottom: "18px" },
+  stateLabel: { color: theme.mutedDim, fontSize: "12px", letterSpacing: "1px", textTransform: "uppercase", marginBottom: "10px" },
+  stopButton: {
+    padding: "6px 16px", marginBottom: "16px", borderRadius: "999px", border: `1px solid ${theme.crisis}`,
+    backgroundColor: "rgba(255,77,77,0.1)", color: "#ff8080", fontSize: "12px", cursor: "pointer"
+  },
   chatBox: {
     display: "flex", flexDirection: "column", width: "100%", overflowY: "auto",
     backgroundColor: theme.panel, backdropFilter: "blur(6px)", borderRadius: "16px", padding: "16px",

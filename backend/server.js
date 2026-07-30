@@ -10,6 +10,7 @@ const { getTherapeuticResponse, getCrisisResponse, extractMemoryAndStyle } = req
 const { detectExplicitCrisis } = require('./crisis');
 const { transcribeAudio } = require('./transcribe');
 const { getImageReaction, extractVisualFact } = require('./vision');
+const { createAccount, verifyLogin } = require('./accounts');
 const {
   loadMemory,
   saveMemory,
@@ -43,6 +44,26 @@ function getUserId(req) {
 
 app.get('/', (req, res) => {
   res.json({ message: 'Avatar Counsellor Backend is running!' });
+});
+
+app.post('/api/account/signup', async (req, res) => {
+  try {
+    const { username, password } = req.body;
+    const accountId = await createAccount(username, password);
+    res.json({ accountId });
+  } catch (error) {
+    res.status(400).json({ error: error.message });
+  }
+});
+
+app.post('/api/account/login', async (req, res) => {
+  try {
+    const { username, password } = req.body;
+    const accountId = await verifyLogin(username, password);
+    res.json({ accountId });
+  } catch (error) {
+    res.status(401).json({ error: error.message });
+  }
 });
 
 app.get('/api/mood-history', (req, res) => {
@@ -172,7 +193,7 @@ function recordMemoryAsync(userId, userMessage, ariaReply, memory, sentiment) {
 app.post('/api/chat', async (req, res) => {
   try {
     const userId = getUserId(req);
-    const { message, conversationHistory } = req.body;
+    const { message, conversationHistory, interrupted } = req.body;
     if (!message) {
       return res.status(400).json({ error: 'Message is required' });
     }
@@ -183,7 +204,10 @@ app.post('/api/chat', async (req, res) => {
     const checkInNote = checkin.checkInNote;
     if (checkInNote) saveMemory(userId, memory);
 
-    const memoryBlock = buildMemoryBlock(memory, checkInNote);
+    let memoryBlock = buildMemoryBlock(memory, checkInNote);
+    if (interrupted) {
+      memoryBlock += "\n\nOne more thing for right now: the person just cut you off mid-reply to say this instead. Acknowledge that naturally and briefly as part of responding to what they're saying now — don't over-apologize or make a big deal of it, just fold it in like a person would ('oh — go ahead', 'sure, what's up') and then continue normally.";
+    }
 
     const explicitCheck = detectExplicitCrisis(message);
 
