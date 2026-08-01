@@ -4,6 +4,7 @@ import Sidebar from "./components/Sidebar";
 import BottomNav from "./components/BottomNav";
 import LiveSessionPrompt from "./components/LiveSessionPrompt";
 import AuthGate from "./components/AuthGate";
+import GetToKnowYou from "./components/GetToKnowYou";
 import HomeView from "./views/HomeView";
 import TalkView from "./views/TalkView";
 import JournalView from "./views/JournalView";
@@ -17,6 +18,8 @@ import { refreshUserIdHeader, hasResolvedIdentity } from "./utils/userId";
 const API_BASE = import.meta.env.VITE_API_BASE_URL || "http://localhost:5000";
 const THEME_STORAGE_KEY = "aria-theme-mode";
 const LIVE_PROMPT_KEY = "aria-live-prompt-dismissed";
+const ONBOARDING_KEY = "aria-onboarding-done";
+const AMBIENT_KEY = "aria-ambient-background";
 
 refreshUserIdHeader();
 
@@ -81,6 +84,13 @@ function attachSilenceDetector(stream, onSilence, options = {}) {
 function App() {
   const isMobile = useIsMobile();
   const [identityResolved, setIdentityResolved] = useState(() => hasResolvedIdentity());
+  const [onboardingDone, setOnboardingDone] = useState(() => {
+    try {
+      return localStorage.getItem(ONBOARDING_KEY) === "true";
+    } catch {
+      return true;
+    }
+  });
   const [activeView, setActiveView] = useState("home");
 
   const [message, setMessage] = useState("");
@@ -98,6 +108,14 @@ function App() {
       return localStorage.getItem(THEME_STORAGE_KEY) || "dark";
     } catch {
       return "dark";
+    }
+  });
+
+  const [ambientBackground, setAmbientBackground] = useState(() => {
+    try {
+      return localStorage.getItem(AMBIENT_KEY) !== "false";
+    } catch {
+      return true;
     }
   });
 
@@ -132,9 +150,20 @@ function App() {
     }
   }, [themeMode]);
 
-  // Navigation and the live-prompt check happen together, right where the
-  // user actually triggers the move — not reactively in an effect watching
-  // activeView, which is the pattern that was causing the lint errors.
+  const handleSetAmbientBackground = (value) => {
+    setAmbientBackground(value);
+    try {
+      localStorage.setItem(AMBIENT_KEY, value ? "true" : "false");
+    } catch {
+      // ignore
+    }
+  };
+
+  const finishOnboarding = () => {
+    try { localStorage.setItem(ONBOARDING_KEY, "true"); } catch { /* ignore */ }
+    setOnboardingDone(true);
+  };
+
   const navigateTo = (view) => {
     setActiveView(view);
     if (view === "talk" && !hasShownLivePromptRef.current) {
@@ -333,6 +362,10 @@ function App() {
     return <AuthGate apiBase={API_BASE} onContinueGuest={() => setIdentityResolved(true)} />;
   }
 
+  if (!onboardingDone) {
+    return <GetToKnowYou apiBase={API_BASE} onDone={finishOnboarding} />;
+  }
+
   const talkProps = {
     message, setMessage, conversation, loading, recording, sentiment, speaking,
     sendMessage, startRecording, stopRecording, liveMode, onToggleLive: setLiveMode,
@@ -344,7 +377,16 @@ function App() {
       case "talk": return <TalkView {...talkProps} />;
       case "journal": return <JournalView apiBase={API_BASE} />;
       case "insights": return <InsightsView apiBase={API_BASE} />;
-      case "settings": return <SettingsView apiBase={API_BASE} themeMode={themeMode} onSetThemeMode={setThemeMode} />;
+      case "settings":
+        return (
+          <SettingsView
+            apiBase={API_BASE}
+            themeMode={themeMode}
+            onSetThemeMode={setThemeMode}
+            ambientBackground={ambientBackground}
+            onSetAmbientBackground={handleSetAmbientBackground}
+          />
+        );
       case "breathe": return <BreatheView />;
       default: return <HomeView apiBase={API_BASE} onNavigate={navigateTo} />;
     }
@@ -352,8 +394,13 @@ function App() {
 
   return (
     <div style={styles.shell}>
-      <div style={styles.auroraA} />
-      <div style={styles.auroraB} />
+      {ambientBackground && (
+        <>
+          <div style={styles.auroraA} />
+          <div style={styles.auroraB} />
+          <div style={styles.auroraC} />
+        </>
+      )}
       {!isMobile && <Sidebar activeView={activeView} onNavigate={navigateTo} />}
       <main style={{ ...styles.main, padding: isMobile ? "20px 16px 90px" : "36px 48px" }}>
         {renderView()}
@@ -368,13 +415,18 @@ const styles = {
   shell: { position: "relative", display: "flex", minHeight: "100vh", backgroundColor: theme.bg, fontFamily: theme.sans, overflow: "hidden" },
   auroraA: {
     position: "fixed", top: "-20%", left: "-10%", width: "60vw", height: "60vw", borderRadius: "50%",
-    background: `radial-gradient(circle, var(--accent-purple), transparent 70%)`, opacity: 0.2,
+    background: `radial-gradient(circle, var(--accent-purple), transparent 70%)`, opacity: 0.24,
     filter: "blur(60px)", animation: "auroraDriftA 22s ease-in-out infinite", pointerEvents: "none", zIndex: -1
   },
   auroraB: {
     position: "fixed", bottom: "-20%", right: "-10%", width: "55vw", height: "55vw", borderRadius: "50%",
-    background: `radial-gradient(circle, var(--accent-teal), transparent 70%)`, opacity: 0.15,
+    background: `radial-gradient(circle, var(--accent-teal), transparent 70%)`, opacity: 0.2,
     filter: "blur(70px)", animation: "auroraDriftB 26s ease-in-out infinite", pointerEvents: "none", zIndex: -1
+  },
+  auroraC: {
+    position: "fixed", top: "30%", left: "35%", width: "42vw", height: "42vw", borderRadius: "50%",
+    background: `radial-gradient(circle, var(--accent-rose), transparent 70%)`, opacity: 0.14,
+    filter: "blur(80px)", animation: "auroraDriftC 30s ease-in-out infinite", pointerEvents: "none", zIndex: -1
   },
   main: { flex: 1, boxSizing: "border-box", minHeight: "100vh", overflowY: "auto" }
 };

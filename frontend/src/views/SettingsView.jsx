@@ -1,70 +1,36 @@
 import { useState } from "react";
 import axios from "axios";
 import { theme } from "../theme";
-import { isLoggedIn, setAccountId, clearAccountId, refreshUserIdHeader } from "../utils/userId";
+import { isLoggedIn, clearAccountId, clearGuestChoice } from "../utils/userId";
 
-function AccountSection({ apiBase }) {
-  const [mode, setMode] = useState("login");
-  const [username, setUsername] = useState("");
-  const [password, setPassword] = useState("");
-  const [error, setError] = useState("");
-  const [busy, setBusy] = useState(false);
+function AccountSection() {
   const loggedIn = isLoggedIn();
 
-  const submit = async () => {
-    setError("");
-    setBusy(true);
-    try {
-      const endpoint = mode === "signup" ? "/api/account/signup" : "/api/account/login";
-      const res = await axios.post(`${apiBase}${endpoint}`, { username, password });
-      setAccountId(res.data.accountId);
-      refreshUserIdHeader();
-      window.location.reload();
-    } catch (err) {
-      setError(err.response?.data?.error || "Something went wrong.");
-    } finally {
-      setBusy(false);
+  const handleAccountAction = () => {
+    if (loggedIn) {
+      clearAccountId();
+    } else {
+      clearGuestChoice();
     }
-  };
-
-  const logout = () => {
-    clearAccountId();
-    refreshUserIdHeader();
     window.location.reload();
   };
-
-  if (loggedIn) {
-    return (
-      <div style={styles.dangerSection}>
-        <div style={styles.rowLabel}>Account</div>
-        <div style={styles.rowSub}>You're signed in — your memory and journal are private to this account, on any device.</div>
-        <button style={{ ...styles.dangerButton, marginTop: "12px" }} onClick={logout}>Log out</button>
-      </div>
-    );
-  }
 
   return (
     <div style={styles.dangerSection}>
       <div style={styles.rowLabel}>Account</div>
       <div style={styles.rowSub}>
-        Optional — creates a private space separate from anyone else using this device, and lets you access it from other devices too. Without one, you're a guest tied to this browser.
+        {loggedIn
+          ? "You're signed in — your memory and journal are private to this account, on any device."
+          : "You're using a guest space tied to this browser. Log in or create an account to reach your space from other devices too."}
       </div>
-      <div style={styles.accountTabs}>
-        <button style={{ ...styles.accountTab, ...(mode === "login" ? styles.accountTabActive : {}) }} onClick={() => setMode("login")}>Log in</button>
-        <button style={{ ...styles.accountTab, ...(mode === "signup" ? styles.accountTabActive : {}) }} onClick={() => setMode("signup")}>Sign up</button>
-      </div>
-      <input style={styles.accountInput} placeholder="Username" value={username} onChange={(e) => setUsername(e.target.value)} />
-      <input style={styles.accountInput} placeholder="Password" type="password" value={password} onChange={(e) => setPassword(e.target.value)} />
-      {error && <p style={styles.accountError}>{error}</p>}
-      <button style={styles.accountSubmit} onClick={submit} disabled={busy || !username || !password}>
-        {busy ? "…" : mode === "signup" ? "Create account" : "Log in"}
+      <button style={{ ...styles.dangerButton, marginTop: "12px" }} onClick={handleAccountAction}>
+        {loggedIn ? "Log out" : "Log in / Sign up"}
       </button>
-      <p style={styles.rowSub}>No password recovery yet — pick something you'll remember.</p>
     </div>
   );
 }
 
-function SettingsView({ apiBase, themeMode, onSetThemeMode }) {
+function SettingsView({ apiBase, themeMode, onSetThemeMode, ambientBackground, onSetAmbientBackground }) {
   const [reduceMotion, setReduceMotion] = useState(
     typeof document !== "undefined" && document.body.classList.contains("reduce-motion")
   );
@@ -141,6 +107,19 @@ function SettingsView({ apiBase, themeMode, onSetThemeMode }) {
 
       <div style={styles.row}>
         <div>
+          <div style={styles.rowLabel}>Ambient background</div>
+          <div style={styles.rowSub}>A soft, flowing glow behind the interface, in the orb's colors. On by default.</div>
+        </div>
+        <button
+          style={{ ...styles.toggle, backgroundColor: ambientBackground ? theme.purple : theme.bgElevated }}
+          onClick={() => onSetAmbientBackground(!ambientBackground)}
+        >
+          <span style={{ ...styles.toggleDot, transform: ambientBackground ? "translateX(18px)" : "translateX(0)" }} />
+        </button>
+      </div>
+
+      <div style={styles.row}>
+        <div>
           <div style={styles.rowLabel}>Light theme</div>
           <div style={styles.rowSub}>Switches the whole interface to a light version of the same palette.</div>
         </div>
@@ -165,7 +144,7 @@ function SettingsView({ apiBase, themeMode, onSetThemeMode }) {
         </button>
       </div>
 
-      <AccountSection apiBase={apiBase} />
+      <AccountSection />
 
       <div style={styles.dangerSection}>
         <div style={styles.rowLabel}>Clear your data</div>
@@ -240,23 +219,6 @@ const styles = {
     backgroundColor: "rgba(255,77,77,0.08)", color: "#ff8080", fontSize: "13px", cursor: "pointer", whiteSpace: "nowrap"
   },
   confirmText: { color: theme.muted, fontSize: "13px", marginTop: "14px" },
-  accountTabs: { display: "flex", gap: "8px", marginTop: "14px", marginBottom: "10px" },
-  accountTab: {
-    padding: "7px 14px", borderRadius: "999px", border: `1px solid ${theme.border}`,
-    backgroundColor: "transparent", color: theme.muted, fontSize: "13px", cursor: "pointer"
-  },
-  accountTabActive: { backgroundColor: theme.bgElevated, color: theme.purpleBright, borderColor: theme.purple },
-  accountInput: {
-    width: "100%", boxSizing: "border-box", padding: "10px 14px", borderRadius: "10px",
-    border: `1px solid ${theme.border}`, backgroundColor: theme.bgElevated, color: theme.cream,
-    fontSize: "14px", marginBottom: "8px"
-  },
-  accountError: { color: "#ff8080", fontSize: "12px", marginBottom: "8px" },
-  accountSubmit: {
-    padding: "10px 20px", borderRadius: "10px", border: "none",
-    background: `linear-gradient(135deg, ${theme.purple}, ${theme.teal})`,
-    color: "#120e1c", fontWeight: 600, cursor: "pointer", fontSize: "14px", marginBottom: "8px"
-  },
   aboutSection: { marginTop: "40px", textAlign: "center" },
   aboutAcronym: { fontFamily: theme.serif, fontWeight: 700, fontSize: "18px", letterSpacing: "2px" },
   aboutMeaning: { fontSize: "12px", color: theme.mutedDim, marginTop: "4px", letterSpacing: "0.5px" }

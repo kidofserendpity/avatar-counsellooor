@@ -78,6 +78,27 @@ app.get('/api/journal', (req, res) => {
   res.json({ entries });
 });
 
+app.post('/api/onboarding', (req, res) => {
+  try {
+    const userId = getUserId(req);
+    const { facts } = req.body;
+    if (!Array.isArray(facts) || facts.length === 0) {
+      return res.json({ saved: 0 });
+    }
+    let memory = loadMemory(userId);
+    facts.forEach((fact) => {
+      if (typeof fact === 'string' && fact.trim()) {
+        memory = addFact(memory, fact.trim());
+      }
+    });
+    saveMemory(userId, memory);
+    res.json({ saved: facts.length });
+  } catch (error) {
+    console.error('Onboarding save error:', error.message);
+    res.status(500).json({ error: 'Could not save onboarding facts' });
+  }
+});
+
 app.post('/api/journal', async (req, res) => {
   try {
     const userId = getUserId(req);

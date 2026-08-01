@@ -43,6 +43,16 @@ export function clearAccountId() {
   }
 }
 
+// Doesn't touch their guest data — just re-opens the gate so they can pick
+// again (log in for real, sign up, or stay a guest). Non-destructive.
+export function clearGuestChoice() {
+  try {
+    localStorage.removeItem(GUEST_CHOSEN_KEY);
+  } catch {
+    // ignore
+  }
+}
+
 export function isLoggedIn() {
   try {
     return !!localStorage.getItem(ACCOUNT_ID_KEY);
@@ -51,15 +61,13 @@ export function isLoggedIn() {
   }
 }
 
-// Has this browser already been through the gate — either by logging in,
-// signing up, or explicitly choosing to continue as a guest?
 export function hasResolvedIdentity() {
   try {
     if (localStorage.getItem(ACCOUNT_ID_KEY)) return true;
     if (localStorage.getItem(GUEST_CHOSEN_KEY) === "true") return true;
     return false;
   } catch {
-    return true; // localStorage unavailable — don't block the app over it
+    return true;
   }
 }
 
@@ -75,7 +83,6 @@ export function refreshUserIdHeader() {
   axios.defaults.headers.common['X-User-Id'] = getActiveUserId();
 }
 
-// Kept for backward compatibility.
 export function getOrCreateUserId() {
   return getActiveUserId();
 }

@@ -149,6 +149,11 @@ button:focus-visible {
   50% { transform: translate(-8%, -12%) scale(1.1); }
 }
 
+@keyframes auroraDriftC {
+  0%, 100% { transform: translate(-15%, 10%) scale(1); }
+  50% { transform: translate(15%, -8%) scale(1.2); }
+}
+
 @media (prefers-reduced-motion: reduce) {
   * { animation-duration: 0.01ms !important; animation-iteration-count: 1 !important; }
 }
