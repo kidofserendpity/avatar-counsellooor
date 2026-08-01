@@ -412,23 +412,23 @@ function App() {
 }
 
 const styles = {
-  shell: { position: "relative", display: "flex", minHeight: "100vh", backgroundColor: theme.bg, fontFamily: theme.sans, overflow: "hidden" },
+  shell: { position: "relative", display: "flex", minHeight: "100vh", fontFamily: theme.sans, overflow: "hidden" },
   auroraA: {
     position: "fixed", top: "-20%", left: "-10%", width: "60vw", height: "60vw", borderRadius: "50%",
-    background: `radial-gradient(circle, var(--accent-purple), transparent 70%)`, opacity: 0.24,
-    filter: "blur(60px)", animation: "auroraDriftA 22s ease-in-out infinite", pointerEvents: "none", zIndex: -1
+    background: `radial-gradient(circle, var(--accent-purple), transparent 70%)`,
+    filter: "blur(60px)", animation: "auroraDriftA 22s ease-in-out infinite", pointerEvents: "none", zIndex: 0
   },
   auroraB: {
     position: "fixed", bottom: "-20%", right: "-10%", width: "55vw", height: "55vw", borderRadius: "50%",
-    background: `radial-gradient(circle, var(--accent-teal), transparent 70%)`, opacity: 0.2,
-    filter: "blur(70px)", animation: "auroraDriftB 26s ease-in-out infinite", pointerEvents: "none", zIndex: -1
+    background: `radial-gradient(circle, var(--accent-teal), transparent 70%)`,
+    filter: "blur(70px)", animation: "auroraDriftB 26s ease-in-out infinite", pointerEvents: "none", zIndex: 0
   },
   auroraC: {
     position: "fixed", top: "30%", left: "35%", width: "42vw", height: "42vw", borderRadius: "50%",
-    background: `radial-gradient(circle, var(--accent-rose), transparent 70%)`, opacity: 0.14,
-    filter: "blur(80px)", animation: "auroraDriftC 30s ease-in-out infinite", pointerEvents: "none", zIndex: -1
+    background: `radial-gradient(circle, var(--accent-rose), transparent 70%)`,
+    filter: "blur(80px)", animation: "auroraDriftC 30s ease-in-out infinite", pointerEvents: "none", zIndex: 0
   },
-  main: { flex: 1, boxSizing: "border-box", minHeight: "100vh", overflowY: "auto" }
+  main: { flex: 1, boxSizing: "border-box", minHeight: "100vh", overflowY: "auto", position: "relative", zIndex: 1 }
 };
 
 export default App;

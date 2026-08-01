@@ -10,7 +10,7 @@ const { getTherapeuticResponse, getCrisisResponse, extractMemoryAndStyle } = req
 const { detectExplicitCrisis } = require('./crisis');
 const { transcribeAudio } = require('./transcribe');
 const { getImageReaction, extractVisualFact } = require('./vision');
-const { createAccount, verifyLogin } = require('./accounts');
+const { createAccount, verifyLogin, getUsernameByAccountId } = require('./accounts');
 const {
   loadMemory,
   saveMemory,
@@ -49,8 +49,8 @@ app.get('/', (req, res) => {
 app.post('/api/account/signup', async (req, res) => {
   try {
     const { username, password } = req.body;
-    const accountId = await createAccount(username, password);
-    res.json({ accountId });
+    const result = await createAccount(username, password);
+    res.json(result);
   } catch (error) {
     res.status(400).json({ error: error.message });
   }
@@ -59,23 +59,11 @@ app.post('/api/account/signup', async (req, res) => {
 app.post('/api/account/login', async (req, res) => {
   try {
     const { username, password } = req.body;
-    const accountId = await verifyLogin(username, password);
-    res.json({ accountId });
+    const result = await verifyLogin(username, password);
+    res.json(result);
   } catch (error) {
     res.status(401).json({ error: error.message });
   }
-});
-
-app.get('/api/mood-history', (req, res) => {
-  const userId = getUserId(req);
-  const memory = loadMemory(userId);
-  res.json({ moodLog: memory.moodLog });
-});
-
-app.get('/api/journal', (req, res) => {
-  const userId = getUserId(req);
-  const entries = loadJournal(userId);
-  res.json({ entries });
 });
 
 app.post('/api/onboarding', (req, res) => {
@@ -97,6 +85,18 @@ app.post('/api/onboarding', (req, res) => {
     console.error('Onboarding save error:', error.message);
     res.status(500).json({ error: 'Could not save onboarding facts' });
   }
+});
+
+app.get('/api/mood-history', (req, res) => {
+  const userId = getUserId(req);
+  const memory = loadMemory(userId);
+  res.json({ moodLog: memory.moodLog });
+});
+
+app.get('/api/journal', (req, res) => {
+  const userId = getUserId(req);
+  const entries = loadJournal(userId);
+  res.json({ entries });
 });
 
 app.post('/api/journal', async (req, res) => {
@@ -214,6 +214,7 @@ function recordMemoryAsync(userId, userMessage, ariaReply, memory, sentiment) {
 app.post('/api/chat', async (req, res) => {
   try {
     const userId = getUserId(req);
+    const username = getUsernameByAccountId(userId);
     const { message, conversationHistory, interrupted } = req.body;
     if (!message) {
       return res.status(400).json({ error: 'Message is required' });
@@ -225,7 +226,7 @@ app.post('/api/chat', async (req, res) => {
     const checkInNote = checkin.checkInNote;
     if (checkInNote) saveMemory(userId, memory);
 
-    let memoryBlock = buildMemoryBlock(memory, checkInNote);
+    let memoryBlock = buildMemoryBlock(memory, checkInNote, username);
     if (interrupted) {
       memoryBlock += "\n\nOne more thing for right now: the person just cut you off mid-reply to say this instead. Acknowledge that naturally and briefly as part of responding to what they're saying now — don't over-apologize or make a big deal of it, just fold it in like a person would ('oh — go ahead', 'sure, what's up') and then continue normally.";
     }
@@ -269,6 +270,7 @@ app.post('/api/chat', async (req, res) => {
 app.post('/api/chat-image', upload.single('image'), async (req, res) => {
   try {
     const userId = getUserId(req);
+    const username = getUsernameByAccountId(userId);
     if (!req.file) {
       return res.status(400).json({ error: 'Image is required' });
     }
@@ -296,7 +298,7 @@ app.post('/api/chat-image', upload.single('image'), async (req, res) => {
     const checkin = consumeCrisisCheckIn(memory);
     memory = checkin.memory;
     if (checkin.checkInNote) saveMemory(userId, memory);
-    const memoryBlock = buildMemoryBlock(memory, checkin.checkInNote);
+    const memoryBlock = buildMemoryBlock(memory, checkin.checkInNote, username);
 
     if (caption && detectExplicitCrisis(caption).isCrisis) {
       const crisisReply = await getCrisisResponse(caption, 'explicit', conversationHistory, memoryBlock);

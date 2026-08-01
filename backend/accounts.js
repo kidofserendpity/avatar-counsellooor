@@ -39,7 +39,7 @@ async function createAccount(username, password) {
   accounts.push({ username: cleanUsername, passwordHash, accountId, createdAt: Date.now() });
   saveAccounts(accounts);
 
-  return accountId;
+  return { accountId, username: cleanUsername };
 }
 
 async function verifyLogin(username, password) {
@@ -53,7 +53,13 @@ async function verifyLogin(username, password) {
   if (!valid) {
     throw new Error('Incorrect password.');
   }
-  return account.accountId;
+  return { accountId: account.accountId, username: account.username };
 }
 
-module.exports = { createAccount, verifyLogin };
+function getUsernameByAccountId(accountId) {
+  const accounts = loadAccounts();
+  const account = accounts.find((a) => a.accountId === accountId);
+  return account ? account.username : null;
+}
+
+module.exports = { createAccount, verifyLogin, getUsernameByAccountId };

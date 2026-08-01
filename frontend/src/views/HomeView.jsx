@@ -3,12 +3,17 @@ import axios from "axios";
 import { Mic, Wind, BookOpen } from "lucide-react";
 import { theme } from "../theme";
 import { useIsMobile } from "../hooks/useIsMobile";
+import { getUsername } from "../utils/userId";
 
 const CARDS = [
   { id: "talk", label: "Talk", Icon: Mic, tint: "rgba(155,107,255,0.14)", color: "#c9b6ff" },
   { id: "breathe", label: "Breathe", Icon: Wind, tint: "rgba(94,234,212,0.12)", color: "#8be9d8" },
   { id: "journal", label: "Journal", Icon: BookOpen, tint: "rgba(201,107,122,0.14)", color: "#e2a3ac" }
 ];
+
+function capitalize(str) {
+  return str ? str.charAt(0).toUpperCase() + str.slice(1) : str;
+}
 
 function getGreeting() {
   const hour = new Date().getHours();
@@ -28,10 +33,12 @@ function HomeView({ apiBase, onNavigate }) {
   }, [apiBase]);
 
   const recent = entries.filter((e) => !e.archived).slice(-3).reverse();
+  const username = getUsername();
+  const greetingText = username ? `${getGreeting()}, ${capitalize(username)}.` : `${getGreeting()}.`;
 
   return (
     <div style={styles.wrap}>
-      <h1 style={{ ...styles.greeting, ...theme.gradientText }}>{getGreeting()}.</h1>
+      <h1 style={{ ...styles.greeting, ...theme.gradientText }}>{greetingText}</h1>
       <p style={styles.sub}>Whatever's on your mind, there's room for it here.</p>
 
       <div style={styles.sectionLabel}>YOUR SPACE</div>

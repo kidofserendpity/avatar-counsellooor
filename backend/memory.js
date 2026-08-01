@@ -144,9 +144,12 @@ function getStyleLine(memory) {
   return bits.length ? `How this specific person tends to talk: ${bits.join('; ')}.` : '';
 }
 
-function getTimeGapLine(lastTimestamp) {
+function getTimeGapLine(lastTimestamp, username) {
   if (!lastTimestamp) {
-    return `This is the very first message you've ever gotten from this person — you've never talked before. Blended naturally into how you react to whatever they just said, work in a short, genuine introduction: introduce yourself as A.R.I.A — written with the periods, since it's an acronym, not a plain name — and if it fits naturally, briefly what it stands for (Adaptive Responsive Intelligent Ally), plus a casual sense of what you're actually good for, real conversation with someone who remembers, not a scripted FAQ chatbot. Keep it brief and in your own voice, actually respond to what they said too, don't just recite facts about yourself. Vary this every time — never the same fixed intro twice. Do not mention who created you here — that only comes up if someone directly asks. If what they just said clearly needs urgent, careful attention instead, drop the introduction entirely and just focus on that — it can wait.`;
+    const nameClause = username
+      ? ` They created their account with the username "${username}" — after you've introduced yourself, ask plainly and warmly whether it's okay to call them that, or whether they'd rather go by something else. Wait for their answer before deciding what to call them going forward — whatever they say becomes what you call them from now on, and you won't need to ask again after this.`
+      : '';
+    return `This is the very first message you've ever gotten from this person — you've never talked before. Blended naturally into how you react to whatever they just said, work in a short, genuine introduction: introduce yourself as A.R.I.A — written with the periods, since it's an acronym, not a plain name — and if it fits naturally, briefly what it stands for (Adaptive Responsive Intelligent Ally), plus a casual sense of what you're actually good for, real conversation with someone who remembers, not a scripted FAQ chatbot.${nameClause} Keep it brief and in your own voice, actually respond to what they said too, don't just recite facts about yourself. Vary this every time — never the same fixed intro twice. Do not mention who created you here — that only comes up if someone directly asks. If what they just said clearly needs urgent, careful attention instead, drop the introduction entirely and just focus on that — it can wait.`;
   }
   const minutes = (Date.now() - lastTimestamp) / 60000;
   if (minutes < 30) return '';
@@ -156,8 +159,8 @@ function getTimeGapLine(lastTimestamp) {
   return `It's been about ${days} day${days === 1 ? '' : 's'} since you last talked.`;
 }
 
-function buildMemoryBlock(memory, checkInNote = '') {
-  const gapLine = getTimeGapLine(memory.lastMessageTimestamp);
+function buildMemoryBlock(memory, checkInNote = '', username = null) {
+  const gapLine = getTimeGapLine(memory.lastMessageTimestamp, username);
   const factsLine = memory.facts.length
     ? `Things you already know about this person from earlier conversations: ${memory.facts.slice(-30).join('; ')}.`
     : '';

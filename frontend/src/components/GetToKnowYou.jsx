@@ -16,7 +16,7 @@ const QUESTIONS = [
     options: [
       { label: "Talk it out", fact: "Tends to talk things out when stressed." },
       { label: "Go quiet", fact: "Tends to go quiet when stressed rather than talk it out." },
-      { label: "Distract themselves", fact: "Tends to distract themselves when stressed." },
+      { label: "Distract yourself", fact: "Tends to distract themselves when stressed." },
       { label: "Push through it", fact: "Tends to just push through when stressed rather than pause." }
     ]
   },

@@ -3,6 +3,7 @@ import axios from "axios";
 const GUEST_ID_KEY = "aria-guest-id";
 const ACCOUNT_ID_KEY = "aria-account-id";
 const GUEST_CHOSEN_KEY = "aria-guest-chosen";
+const USERNAME_KEY = "aria-username";
 
 function getOrCreateGuestId() {
   try {
@@ -43,11 +44,33 @@ export function clearAccountId() {
   }
 }
 
-// Doesn't touch their guest data — just re-opens the gate so they can pick
-// again (log in for real, sign up, or stay a guest). Non-destructive.
 export function clearGuestChoice() {
   try {
     localStorage.removeItem(GUEST_CHOSEN_KEY);
+  } catch {
+    // ignore
+  }
+}
+
+export function setUsername(username) {
+  try {
+    localStorage.setItem(USERNAME_KEY, username);
+  } catch {
+    // ignore
+  }
+}
+
+export function getUsername() {
+  try {
+    return localStorage.getItem(USERNAME_KEY);
+  } catch {
+    return null;
+  }
+}
+
+export function clearUsername() {
+  try {
+    localStorage.removeItem(USERNAME_KEY);
   } catch {
     // ignore
   }

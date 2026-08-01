@@ -140,18 +140,18 @@ button:focus-visible {
 }
 
 @keyframes auroraDriftA {
-  0%, 100% { transform: translate(-10%, -10%) scale(1); }
-  50% { transform: translate(10%, 5%) scale(1.15); }
+  0%, 100% { transform: translate(-8%, -8%) scale(1); opacity: 0.09; }
+  50% { transform: translate(6%, 4%) scale(1.15); opacity: 0.15; }
 }
 
 @keyframes auroraDriftB {
-  0%, 100% { transform: translate(10%, 10%) scale(1); }
-  50% { transform: translate(-8%, -12%) scale(1.1); }
+  0%, 100% { transform: translate(8%, 8%) scale(1); opacity: 0.08; }
+  50% { transform: translate(-6%, -6%) scale(1.12); opacity: 0.13; }
 }
 
 @keyframes auroraDriftC {
-  0%, 100% { transform: translate(-15%, 10%) scale(1); }
-  50% { transform: translate(15%, -8%) scale(1.2); }
+  0%, 100% { transform: translate(-10%, 6%) scale(1); opacity: 0.06; }
+  50% { transform: translate(8%, -6%) scale(1.2); opacity: 0.11; }
 }
 
 @media (prefers-reduced-motion: reduce) {

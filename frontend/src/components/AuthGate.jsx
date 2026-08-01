@@ -1,7 +1,7 @@
 import { useState } from "react";
 import axios from "axios";
 import { theme } from "../theme";
-import { setAccountId, markGuestChosen } from "../utils/userId";
+import { setAccountId, setUsername as storeUsername, markGuestChosen } from "../utils/userId";
 
 function AuthGate({ apiBase, onContinueGuest }) {
   const [mode, setMode] = useState("login");
@@ -17,6 +17,7 @@ function AuthGate({ apiBase, onContinueGuest }) {
       const endpoint = mode === "signup" ? "/api/account/signup" : "/api/account/login";
       const res = await axios.post(`${apiBase}${endpoint}`, { username, password });
       setAccountId(res.data.accountId);
+      if (res.data.username) storeUsername(res.data.username);
       window.location.reload();
     } catch (err) {
       setError(err.response?.data?.error || "Something went wrong.");

@@ -1,17 +1,15 @@
 import { useState } from "react";
 import axios from "axios";
 import { theme } from "../theme";
-import { isLoggedIn, clearAccountId, clearGuestChoice } from "../utils/userId";
+import { isLoggedIn, clearAccountId, clearGuestChoice, clearUsername } from "../utils/userId";
 
 function AccountSection() {
   const loggedIn = isLoggedIn();
 
   const handleAccountAction = () => {
-    if (loggedIn) {
-      clearAccountId();
-    } else {
-      clearGuestChoice();
-    }
+    clearAccountId();
+    clearGuestChoice();
+    clearUsername();
     window.location.reload();
   };
 
