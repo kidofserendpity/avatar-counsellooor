@@ -1,16 +1,17 @@
 import { useEffect, useState, useCallback } from "react";
 import axios from "axios";
+import { Lightbulb, Heart, Flame, Target, Moon, Image, CloudRain, FileText, Archive, ArchiveRestore, Trash2 } from "lucide-react";
 import { theme } from "../theme";
 
 const CATEGORY_META = {
-  reflection: { label: "Reflection", icon: "🪞", color: "#9b6bff" },
-  gratitude: { label: "Gratitude", icon: "🙏", color: "#5eead4" },
-  venting: { label: "Venting", icon: "💢", color: "#d9776a" },
-  goal: { label: "Goal", icon: "🎯", color: "#f2b872" },
-  dream: { label: "Dream", icon: "💭", color: "#8b7aa8" },
-  memory: { label: "Memory", icon: "📷", color: "#c9b6ff" },
-  worry: { label: "Worry", icon: "🌧️", color: "#8b95a8" },
-  other: { label: "Other", icon: "📝", color: "#6b6578" }
+  reflection: { label: "Reflection", Icon: Lightbulb, color: "#9b6bff" },
+  gratitude: { label: "Gratitude", Icon: Heart, color: "#5eead4" },
+  venting: { label: "Venting", Icon: Flame, color: "#d9776a" },
+  goal: { label: "Goal", Icon: Target, color: "#f2b872" },
+  dream: { label: "Dream", Icon: Moon, color: "#8b7aa8" },
+  memory: { label: "Memory", Icon: Image, color: "#c9b6ff" },
+  worry: { label: "Worry", Icon: CloudRain, color: "#8b95a8" },
+  other: { label: "Other", Icon: FileText, color: "#6b6578" }
 };
 
 function JournalView({ apiBase }) {
@@ -73,7 +74,7 @@ function JournalView({ apiBase }) {
     <div style={styles.wrap}>
       <h1 style={styles.title}>Journal</h1>
       <p style={styles.sub}>
-        Private writing space. Aria can talk with you about anything here if you bring it up — she won't raise it on her own.
+        Private writing space. A.R.I.A can talk with you about anything here if you bring it up — she won't raise it on her own.
       </p>
 
       <div style={styles.composer}>
@@ -93,7 +94,7 @@ function JournalView({ apiBase }) {
         <select style={styles.filterSelect} value={categoryFilter} onChange={(e) => setCategoryFilter(e.target.value)}>
           <option value="all">All categories</option>
           {Object.entries(CATEGORY_META).map(([key, meta]) => (
-            <option key={key} value={key}>{meta.icon} {meta.label}</option>
+            <option key={key} value={key}>{meta.label}</option>
           ))}
         </select>
         <button
@@ -113,18 +114,20 @@ function JournalView({ apiBase }) {
       <div style={styles.entryList}>
         {visible.map((entry) => {
           const meta = CATEGORY_META[entry.category] || CATEGORY_META.other;
+          const CategoryIcon = meta.Icon;
           return (
             <div key={entry.id} style={styles.entryCard}>
               <div style={styles.entryHeader}>
                 <div style={{ ...styles.categoryChip, color: meta.color, borderColor: meta.color }}>
-                  {meta.icon} {meta.label}
+                  <CategoryIcon size={12} />
+                  {meta.label}
                 </div>
                 <div style={styles.entryActions}>
                   <button style={styles.iconButton} onClick={() => toggleArchive(entry.id, entry.archived)} title={entry.archived ? "Unarchive" : "Archive"}>
-                    {entry.archived ? "📤" : "🗄️"}
+                    {entry.archived ? <ArchiveRestore size={15} /> : <Archive size={15} />}
                   </button>
                   <button style={styles.iconButton} onClick={() => deleteEntry(entry.id)} title="Delete">
-                    🗑️
+                    <Trash2 size={15} />
                   </button>
                 </div>
               </div>
@@ -176,12 +179,12 @@ const styles = {
   entryHeader: { display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: "8px" },
   categoryChip: {
     fontSize: "11px", padding: "3px 10px", borderRadius: "999px", border: "1px solid",
-    display: "inline-block", letterSpacing: "0.3px"
+    display: "inline-flex", alignItems: "center", gap: "5px", letterSpacing: "0.3px"
   },
   entryActions: { display: "flex", gap: "4px" },
   iconButton: {
-    background: "transparent", border: "none", cursor: "pointer", fontSize: "14px",
-    padding: "4px 6px", borderRadius: "6px", color: theme.mutedDim
+    background: "transparent", border: "none", cursor: "pointer", display: "flex",
+    padding: "5px", borderRadius: "6px", color: theme.mutedDim
   },
   entryDate: { color: theme.mutedDim, fontSize: "11px", letterSpacing: "0.5px", marginBottom: "8px", textTransform: "uppercase" },
   entryText: { color: theme.cream, fontSize: "14px", lineHeight: 1.6, margin: 0, whiteSpace: "pre-wrap" }

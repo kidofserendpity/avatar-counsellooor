@@ -1,12 +1,13 @@
 import { useEffect, useState } from "react";
 import axios from "axios";
+import { Mic, Wind, BookOpen } from "lucide-react";
 import { theme } from "../theme";
 import { useIsMobile } from "../hooks/useIsMobile";
 
 const CARDS = [
-  { id: "talk", label: "Talk", icon: "🎙️", tint: "rgba(155,107,255,0.14)", color: "#c9b6ff" },
-  { id: "breathe", label: "Breathe", icon: "🌬️", tint: "rgba(94,234,212,0.12)", color: "#8be9d8" },
-  { id: "journal", label: "Journal", icon: "📓", tint: "rgba(201,107,122,0.14)", color: "#e2a3ac" }
+  { id: "talk", label: "Talk", Icon: Mic, tint: "rgba(155,107,255,0.14)", color: "#c9b6ff" },
+  { id: "breathe", label: "Breathe", Icon: Wind, tint: "rgba(94,234,212,0.12)", color: "#8be9d8" },
+  { id: "journal", label: "Journal", Icon: BookOpen, tint: "rgba(201,107,122,0.14)", color: "#e2a3ac" }
 ];
 
 function getGreeting() {
@@ -35,10 +36,10 @@ function HomeView({ apiBase, onNavigate }) {
 
       <div style={styles.sectionLabel}>YOUR SPACE</div>
       <div style={{ ...styles.cardGrid, flexDirection: isMobile ? "column" : "row" }}>
-        {CARDS.map((card) => (
-          <button key={card.id} style={{ ...styles.card, backgroundColor: card.tint }} onClick={() => onNavigate(card.id)}>
-            <span style={{ ...styles.cardIcon, color: card.color }}>{card.icon}</span>
-            <span style={styles.cardLabel}>{card.label}</span>
+        {CARDS.map(({ id, label, Icon, tint, color }) => (
+          <button key={id} style={{ ...styles.card, backgroundColor: tint }} onClick={() => onNavigate(id)}>
+            <Icon size={22} color={color} />
+            <span style={styles.cardLabel}>{label}</span>
           </button>
         ))}
       </div>
@@ -50,7 +51,7 @@ function HomeView({ apiBase, onNavigate }) {
         <div style={styles.activityList}>
           {recent.map((entry) => (
             <div key={entry.id} style={styles.activityRow}>
-              <span style={styles.activityIcon}>📓</span>
+              <BookOpen size={16} color={theme.mutedDim} />
               <div>
                 <div style={styles.activityText}>{entry.text.slice(0, 80)}{entry.text.length > 80 ? "…" : ""}</div>
                 <div style={styles.activityDate}>{new Date(entry.timestamp).toLocaleDateString()}</div>
@@ -73,7 +74,6 @@ const styles = {
     flex: 1, border: "none", borderRadius: "16px", padding: "22px 18px", display: "flex",
     flexDirection: "column", alignItems: "flex-start", gap: "26px", cursor: "pointer", textAlign: "left"
   },
-  cardIcon: { fontSize: "22px" },
   cardLabel: { color: theme.cream, fontSize: "15px", fontWeight: 600 },
   emptyState: { color: theme.mutedDim, fontSize: "13px" },
   activityList: { display: "flex", flexDirection: "column", gap: "10px" },
@@ -81,7 +81,6 @@ const styles = {
     display: "flex", gap: "12px", alignItems: "center", padding: "14px 16px",
     backgroundColor: theme.bgElevated, borderRadius: "12px", border: `1px solid ${theme.border}`
   },
-  activityIcon: { fontSize: "16px" },
   activityText: { color: theme.cream, fontSize: "14px" },
   activityDate: { color: theme.mutedDim, fontSize: "12px", marginTop: "2px" }
 };

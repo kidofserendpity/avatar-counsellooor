@@ -1,4 +1,5 @@
 import { useState, useRef, useEffect } from "react";
+import { Mic, Square, Camera } from "lucide-react";
 import { theme } from "../theme";
 import { useIsMobile } from "../hooks/useIsMobile";
 
@@ -209,7 +210,9 @@ function TalkView({
       </p>
 
       {canInterrupt && (
-        <button style={styles.stopButton} onClick={onStopAria}>⏹ Stop</button>
+        <button style={styles.stopButton} onClick={onStopAria}>
+          <Square size={12} fill="currentColor" /> Stop
+        </button>
       )}
 
       {showTranscript && (
@@ -247,10 +250,10 @@ function TalkView({
           style={{ ...styles.micButton, backgroundColor: recording ? theme.crisis : theme.bgElevated, borderColor: recording ? theme.crisis : theme.border }}
           onClick={recording ? stopRecording : () => startRecording(false)}
         >
-          {recording ? "⏹" : "🎙️"}
+          {recording ? <Square size={16} fill="currentColor" /> : <Mic size={16} />}
         </button>
         <button style={styles.cameraButton} onClick={() => fileInputRef.current?.click()}>
-          📷
+          <Camera size={16} />
         </button>
         <input
           ref={fileInputRef}
@@ -324,7 +327,8 @@ const styles = {
   },
   stateLabel: { color: theme.mutedDim, fontSize: "12px", letterSpacing: "1px", textTransform: "uppercase", marginBottom: "10px" },
   stopButton: {
-    padding: "6px 16px", marginBottom: "16px", borderRadius: "999px", border: `1px solid ${theme.crisis}`,
+    display: "flex", alignItems: "center", gap: "6px", padding: "6px 16px", marginBottom: "16px",
+    borderRadius: "999px", border: `1px solid ${theme.crisis}`,
     backgroundColor: "rgba(255,77,77,0.1)", color: "#ff8080", fontSize: "12px", cursor: "pointer"
   },
   chatBox: {
@@ -339,8 +343,8 @@ const styles = {
   typingDots: { display: "flex", gap: "4px", padding: "2px 0" },
   typingDot: { width: "6px", height: "6px", borderRadius: "50%", backgroundColor: theme.purple, animation: "typingBounce 1s ease-in-out infinite" },
   inputDock: { display: "flex", width: "100%", gap: "8px" },
-  micButton: { padding: "10px 14px", color: theme.cream, border: `1px solid ${theme.border}`, borderRadius: "12px", cursor: "pointer", fontSize: "17px", backgroundColor: theme.bgElevated },
-  cameraButton: { padding: "10px 14px", color: theme.cream, border: `1px solid ${theme.border}`, borderRadius: "12px", cursor: "pointer", fontSize: "17px", backgroundColor: theme.bgElevated },
+  micButton: { display: "flex", alignItems: "center", justifyContent: "center", padding: "10px 14px", color: theme.cream, border: `1px solid ${theme.border}`, borderRadius: "12px", cursor: "pointer", backgroundColor: theme.bgElevated },
+  cameraButton: { display: "flex", alignItems: "center", justifyContent: "center", padding: "10px 14px", color: theme.cream, border: `1px solid ${theme.border}`, borderRadius: "12px", cursor: "pointer", backgroundColor: theme.bgElevated },
   input: { flex: 1, minWidth: 0, padding: "10px 14px", borderRadius: "12px", border: `1px solid ${theme.border}`, backgroundColor: theme.bgElevated, color: theme.cream, fontSize: "15px", outline: "none" },
   sendButton: { padding: "10px 18px", background: `linear-gradient(135deg, ${theme.purple}, ${theme.teal})`, color: "#120e1c", fontWeight: 600, border: "none", borderRadius: "12px", cursor: "pointer", fontSize: "15px" }
 };

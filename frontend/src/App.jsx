@@ -3,6 +3,7 @@ import axios from "axios";
 import Sidebar from "./components/Sidebar";
 import BottomNav from "./components/BottomNav";
 import LiveSessionPrompt from "./components/LiveSessionPrompt";
+import AuthGate from "./components/AuthGate";
 import HomeView from "./views/HomeView";
 import TalkView from "./views/TalkView";
 import JournalView from "./views/JournalView";
@@ -11,13 +12,21 @@ import SettingsView from "./views/SettingsView";
 import BreatheView from "./views/BreatheView";
 import { theme } from "./theme";
 import { useIsMobile } from "./hooks/useIsMobile";
-import { refreshUserIdHeader } from "./utils/userId";
+import { refreshUserIdHeader, hasResolvedIdentity } from "./utils/userId";
 
 const API_BASE = import.meta.env.VITE_API_BASE_URL || "http://localhost:5000";
 const THEME_STORAGE_KEY = "aria-theme-mode";
 const LIVE_PROMPT_KEY = "aria-live-prompt-dismissed";
 
 refreshUserIdHeader();
+
+function getLivePromptDismissed() {
+  try {
+    return localStorage.getItem(LIVE_PROMPT_KEY) === "true";
+  } catch {
+    return false;
+  }
+}
 
 function attachSilenceDetector(stream, onSilence, options = {}) {
   const { silenceThreshold = 0.02, silenceDuration = 1200, minSpeakingDuration = 700 } = options;
@@ -71,6 +80,7 @@ function attachSilenceDetector(stream, onSilence, options = {}) {
 
 function App() {
   const isMobile = useIsMobile();
+  const [identityResolved, setIdentityResolved] = useState(() => hasResolvedIdentity());
   const [activeView, setActiveView] = useState("home");
 
   const [message, setMessage] = useState("");
@@ -81,14 +91,7 @@ function App() {
   const [sentiment, setSentiment] = useState("calm");
   const [speaking, setSpeaking] = useState(false);
   const [liveMode, setLiveMode] = useState(false);
-
-  const [showLivePrompt, setShowLivePrompt] = useState(() => {
-    try {
-      return localStorage.getItem(LIVE_PROMPT_KEY) !== "true";
-    } catch {
-      return true;
-    }
-  });
+  const [showLivePrompt, setShowLivePrompt] = useState(false);
 
   const [themeMode, setThemeMode] = useState(() => {
     try {
@@ -111,6 +114,7 @@ function App() {
   const abortControllerRef = useRef(null);
   const requestIdRef = useRef(0);
   const pendingInterruptRef = useRef(false);
+  const hasShownLivePromptRef = useRef(false);
 
   useEffect(() => { conversationRef.current = conversation; }, [conversation]);
   useEffect(() => { liveModeRef.current = liveMode; }, [liveMode]);
@@ -128,13 +132,25 @@ function App() {
     }
   }, [themeMode]);
 
+  // Navigation and the live-prompt check happen together, right where the
+  // user actually triggers the move — not reactively in an effect watching
+  // activeView, which is the pattern that was causing the lint errors.
+  const navigateTo = (view) => {
+    setActiveView(view);
+    if (view === "talk" && !hasShownLivePromptRef.current) {
+      hasShownLivePromptRef.current = true;
+      if (!getLivePromptDismissed()) {
+        setShowLivePrompt(true);
+      }
+    }
+  };
+
   const handleLiveChoice = (startLive, dontAskAgain) => {
     if (dontAskAgain) {
       try { localStorage.setItem(LIVE_PROMPT_KEY, "true"); } catch { /* ignore */ }
     }
     setShowLivePrompt(false);
     if (startLive) {
-      setActiveView("talk");
       setLiveMode(true);
     }
   };
@@ -154,8 +170,6 @@ function App() {
     });
   };
 
-  // Cuts off whatever Aria is currently doing (talking or musing) and marks
-  // the next message as an interruption, without needing to send anything yet.
   const stopAria = () => {
     if (audioRef.current) audioRef.current.pause();
     if (abortControllerRef.current) abortControllerRef.current.abort();
@@ -315,6 +329,10 @@ function App() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [loading, speaking, recording, imageLoading]);
 
+  if (!identityResolved) {
+    return <AuthGate apiBase={API_BASE} onContinueGuest={() => setIdentityResolved(true)} />;
+  }
+
   const talkProps = {
     message, setMessage, conversation, loading, recording, sentiment, speaking,
     sendMessage, startRecording, stopRecording, liveMode, onToggleLive: setLiveMode,
@@ -328,7 +346,7 @@ function App() {
       case "insights": return <InsightsView apiBase={API_BASE} />;
       case "settings": return <SettingsView apiBase={API_BASE} themeMode={themeMode} onSetThemeMode={setThemeMode} />;
       case "breathe": return <BreatheView />;
-      default: return <HomeView apiBase={API_BASE} onNavigate={setActiveView} />;
+      default: return <HomeView apiBase={API_BASE} onNavigate={navigateTo} />;
     }
   };
 
@@ -336,11 +354,11 @@ function App() {
     <div style={styles.shell}>
       <div style={styles.auroraA} />
       <div style={styles.auroraB} />
-      {!isMobile && <Sidebar activeView={activeView} onNavigate={setActiveView} />}
+      {!isMobile && <Sidebar activeView={activeView} onNavigate={navigateTo} />}
       <main style={{ ...styles.main, padding: isMobile ? "20px 16px 90px" : "36px 48px" }}>
         {renderView()}
       </main>
-      {isMobile && <BottomNav activeView={activeView} onNavigate={setActiveView} />}
+      {isMobile && <BottomNav activeView={activeView} onNavigate={navigateTo} />}
       {showLivePrompt && <LiveSessionPrompt onChoose={handleLiveChoice} />}
     </div>
   );

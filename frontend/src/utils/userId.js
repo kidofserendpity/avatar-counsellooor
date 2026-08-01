@@ -2,6 +2,7 @@ import axios from "axios";
 
 const GUEST_ID_KEY = "aria-guest-id";
 const ACCOUNT_ID_KEY = "aria-account-id";
+const GUEST_CHOSEN_KEY = "aria-guest-chosen";
 
 function getOrCreateGuestId() {
   try {
@@ -50,11 +51,31 @@ export function isLoggedIn() {
   }
 }
 
+// Has this browser already been through the gate — either by logging in,
+// signing up, or explicitly choosing to continue as a guest?
+export function hasResolvedIdentity() {
+  try {
+    if (localStorage.getItem(ACCOUNT_ID_KEY)) return true;
+    if (localStorage.getItem(GUEST_CHOSEN_KEY) === "true") return true;
+    return false;
+  } catch {
+    return true; // localStorage unavailable — don't block the app over it
+  }
+}
+
+export function markGuestChosen() {
+  try {
+    localStorage.setItem(GUEST_CHOSEN_KEY, "true");
+  } catch {
+    // ignore
+  }
+}
+
 export function refreshUserIdHeader() {
   axios.defaults.headers.common['X-User-Id'] = getActiveUserId();
 }
 
-// Kept for backward compatibility — App.jsx and MoodChart.jsx already import this exact name.
+// Kept for backward compatibility.
 export function getOrCreateUserId() {
   return getActiveUserId();
 }

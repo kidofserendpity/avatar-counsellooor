@@ -1,11 +1,12 @@
+import { Home, Mic, BookOpen, BarChart3, Settings } from "lucide-react";
 import { theme } from "../theme";
 
 const NAV_ITEMS = [
-  { id: "home", label: "Home", icon: "🏠" },
-  { id: "talk", label: "Talk", icon: "🎙️" },
-  { id: "journal", label: "Journal", icon: "📓" },
-  { id: "insights", label: "Insights", icon: "📊" },
-  { id: "settings", label: "Settings", icon: "⚙️" }
+  { id: "home", label: "Home", Icon: Home },
+  { id: "talk", label: "Talk", Icon: Mic },
+  { id: "journal", label: "Journal", Icon: BookOpen },
+  { id: "insights", label: "Insights", Icon: BarChart3 },
+  { id: "settings", label: "Settings", Icon: Settings }
 ];
 
 function Sidebar({ activeView, onNavigate }) {
@@ -13,17 +14,14 @@ function Sidebar({ activeView, onNavigate }) {
     <aside style={styles.sidebar}>
       <div style={{ ...styles.brand, ...theme.gradientText }}>A.R.I.A</div>
       <nav style={styles.nav}>
-        {NAV_ITEMS.map((item) => (
+        {NAV_ITEMS.map(({ id, label, Icon }) => (
           <button
-            key={item.id}
-            onClick={() => onNavigate(item.id)}
-            style={{
-              ...styles.navItem,
-              ...(activeView === item.id ? styles.navItemActive : {})
-            }}
+            key={id}
+            onClick={() => onNavigate(id)}
+            style={{ ...styles.navItem, ...(activeView === id ? styles.navItemActive : {}) }}
           >
-            <span style={styles.navIcon}>{item.icon}</span>
-            {item.label}
+            <Icon size={16} strokeWidth={2} />
+            {label}
           </button>
         ))}
       </nav>
@@ -46,7 +44,6 @@ const styles = {
     cursor: "pointer", textAlign: "left", transition: "all 0.2s ease"
   },
   navItemActive: { backgroundColor: "rgba(155,107,255,0.14)", color: theme.purpleBright },
-  navIcon: { fontSize: "16px" },
   footer: { fontSize: "12px", color: theme.mutedDim, paddingLeft: "10px" }
 };
 
