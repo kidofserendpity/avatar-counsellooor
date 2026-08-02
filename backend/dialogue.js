@@ -91,6 +91,8 @@ LENGTH: short|medium|long
 HUMOR: yes|no
 FORMALITY: casual|neutral|formal`;
 
+const LIVE_CHECKIN_PROMPT = `You've been in a live voice conversation, and the other person has gone quiet for a little while — could be they stepped away, are thinking, or are just done talking for now. Say one short, warm, low-key check-in — not alarmed, not needy, not scripted. Something like checking if they're still there or still want to keep talking, in your own words, varying the phrasing naturally each time. One sentence, genuinely casual, no pressure in the tone.`;
+
 function trimIfTruncated(text, finishReason) {
   if (finishReason !== 'length') return text;
   const lastPunct = Math.max(text.lastIndexOf('.'), text.lastIndexOf('!'), text.lastIndexOf('?'));
@@ -221,4 +223,18 @@ const extractMemoryAndStyle = async (userMessage, ariaResponse) => {
   }
 };
 
-module.exports = { getTherapeuticResponse, getCrisisResponse, extractMemoryAndStyle, CBT_SYSTEM_PROMPT };
+const getLiveCheckInLine = async (conversationHistory = []) => {
+  const systemPrompt = `${CBT_SYSTEM_PROMPT}\n\n${LIVE_CHECKIN_PROMPT}`;
+  const completion = await groq.chat.completions.create({
+    model: 'openai/gpt-oss-120b',
+    messages: [
+      { role: 'system', content: systemPrompt },
+      ...conversationHistory.slice(-4).map(({ role, content }) => ({ role, content }))
+    ],
+    max_tokens: 60,
+    temperature: 0.9,
+  });
+  return completion.choices[0].message.content.trim();
+};
+
+module.exports = { getTherapeuticResponse, getCrisisResponse, extractMemoryAndStyle, getLiveCheckInLine, CBT_SYSTEM_PROMPT };

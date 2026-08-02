@@ -14,11 +14,13 @@ const CATEGORY_META = {
   other: { label: "Other", Icon: FileText, color: "#6b6578" }
 };
 
-function CategoryDropdown({ value, onChange }) {
+function CategoryDropdown({ value, onChange, includeAll }) {
   const [open, setOpen] = useState(false);
   const ref = useRef(null);
 
-  const current = value === "all" ? { label: "All categories", Icon: null, color: theme.muted } : CATEGORY_META[value];
+  const current = includeAll && value === "all"
+    ? { label: "All categories", Icon: null, color: theme.muted }
+    : CATEGORY_META[value] || CATEGORY_META.other;
   const CurrentIcon = current.Icon;
 
   return (
@@ -32,13 +34,15 @@ function CategoryDropdown({ value, onChange }) {
         <>
           <div style={styles.dropdownBackdrop} onClick={() => setOpen(false)} />
           <div style={styles.dropdownPanel}>
-            <button
-              style={{ ...styles.dropdownOption, ...(value === "all" ? styles.dropdownOptionActive : {}) }}
-              onClick={() => { onChange("all"); setOpen(false); }}
-            >
-              <span style={styles.dropdownOptionLabel}>All categories</span>
-              {value === "all" && <Check size={14} color={theme.purpleBright} />}
-            </button>
+            {includeAll && (
+              <button
+                style={{ ...styles.dropdownOption, ...(value === "all" ? styles.dropdownOptionActive : {}) }}
+                onClick={() => { onChange("all"); setOpen(false); }}
+              >
+                <span style={styles.dropdownOptionLabel}>All categories</span>
+                {value === "all" && <Check size={14} color={theme.purpleBright} />}
+              </button>
+            )}
             {Object.entries(CATEGORY_META).map(([key, meta]) => (
               <button
                 key={key}
@@ -59,7 +63,9 @@ function CategoryDropdown({ value, onChange }) {
 
 function JournalView({ apiBase }) {
   const [entries, setEntries] = useState([]);
+  const [subject, setSubject] = useState("");
   const [draft, setDraft] = useState("");
+  const [composeCategory, setComposeCategory] = useState("other");
   const [saving, setSaving] = useState(false);
   const [loaded, setLoaded] = useState(false);
   const [categoryFilter, setCategoryFilter] = useState("all");
@@ -78,8 +84,10 @@ function JournalView({ apiBase }) {
     if (!draft.trim()) return;
     setSaving(true);
     try {
-      await axios.post(`${apiBase}/api/journal`, { text: draft.trim() });
+      await axios.post(`${apiBase}/api/journal`, { text: draft.trim(), category: composeCategory, subject: subject.trim() });
       setDraft("");
+      setSubject("");
+      setComposeCategory("other");
       loadEntries();
     } catch (err) {
       console.error("Journal save failed:", err);
@@ -119,25 +127,34 @@ function JournalView({ apiBase }) {
         <div style={styles.composerColumn}>
           <h1 style={styles.title}>Journal</h1>
           <p style={styles.sub}>
-            Private writing space. A.R.I.A can talk with you about anything here if you bring it up — she won't raise it on her own.
+            Private writing space. A.R.I.A can talk with you about anything here if you bring it up, she won't raise it on her own.
           </p>
           <div style={styles.composer}>
+            <input
+              style={styles.subjectInput}
+              value={subject}
+              onChange={(e) => setSubject(e.target.value)}
+              placeholder="Subject (optional)"
+            />
             <textarea
               style={styles.textarea}
               value={draft}
               onChange={(e) => setDraft(e.target.value)}
               placeholder="Write whatever you need to get out…"
-              rows={9}
+              rows={8}
             />
-            <button style={styles.saveButton} onClick={saveEntry} disabled={saving || !draft.trim()}>
-              {saving ? "Saving…" : "Save entry"}
-            </button>
+            <div style={styles.composerFooter}>
+              <CategoryDropdown value={composeCategory} onChange={setComposeCategory} includeAll={false} />
+              <button style={styles.saveButton} onClick={saveEntry} disabled={saving || !draft.trim()}>
+                {saving ? "Saving…" : "Save entry"}
+              </button>
+            </div>
           </div>
         </div>
 
         <div style={styles.entriesColumn}>
           <div style={styles.controlsRow}>
-            <CategoryDropdown value={categoryFilter} onChange={setCategoryFilter} />
+            <CategoryDropdown value={categoryFilter} onChange={setCategoryFilter} includeAll={true} />
             <button
               style={{ ...styles.archiveToggle, ...(showArchived ? styles.archiveToggleActive : {}) }}
               onClick={() => setShowArchived((s) => !s)}
@@ -148,7 +165,7 @@ function JournalView({ apiBase }) {
 
           {loaded && visible.length === 0 && (
             <p style={styles.emptyState}>
-              {showArchived ? "No archived entries." : "Nothing here yet — your first one starts on the left."}
+              {showArchived ? "No archived entries." : "No journals here yet."}
             </p>
           )}
 
@@ -175,6 +192,7 @@ function JournalView({ apiBase }) {
                   <div style={styles.entryDate}>
                     {new Date(entry.timestamp).toLocaleDateString(undefined, { weekday: "short", month: "short", day: "numeric" })}
                   </div>
+                  {entry.subject && <div style={styles.entrySubject}>{entry.subject}</div>}
                   <p style={styles.entryText}>{entry.text}</p>
                 </div>
               );
@@ -195,14 +213,19 @@ const styles = {
   sub: { color: theme.muted, fontSize: "14px", marginTop: "6px", marginBottom: "20px", lineHeight: 1.5 },
   composer: {
     backgroundColor: theme.panel, border: `1px solid ${theme.border}`, borderRadius: "16px",
-    padding: "16px", display: "flex", flexDirection: "column", gap: "12px"
+    padding: "16px", display: "flex", flexDirection: "column", gap: "10px"
+  },
+  subjectInput: {
+    background: "transparent", border: "none", outline: "none", borderBottom: `1px solid ${theme.border}`,
+    color: theme.cream, fontFamily: theme.serif, fontSize: "16px", fontWeight: 600, padding: "4px 2px 10px"
   },
   textarea: {
     resize: "vertical", backgroundColor: "transparent", border: "none", outline: "none",
-    color: theme.cream, fontSize: "15px", lineHeight: 1.6, fontFamily: theme.sans, minHeight: "180px"
+    color: theme.cream, fontSize: "15px", lineHeight: 1.6, fontFamily: theme.sans, minHeight: "160px"
   },
+  composerFooter: { display: "flex", justifyContent: "space-between", alignItems: "center", gap: "10px", flexWrap: "wrap" },
   saveButton: {
-    alignSelf: "flex-end", padding: "10px 20px",
+    padding: "10px 20px",
     background: `linear-gradient(135deg, ${theme.rose}, ${theme.roseDeep})`,
     color: "#1c0f12", fontWeight: 600, border: "none", borderRadius: "10px", cursor: "pointer", fontSize: "14px"
   },
@@ -217,7 +240,8 @@ const styles = {
   dropdownPanel: {
     position: "absolute", top: "calc(100% + 6px)", left: 0, minWidth: "180px", zIndex: 50,
     backgroundColor: theme.bgElevated, border: `1px solid ${theme.border}`, borderRadius: "12px",
-    padding: "6px", boxShadow: "0 12px 28px rgba(0,0,0,0.4)", display: "flex", flexDirection: "column", gap: "2px"
+    padding: "6px", boxShadow: "0 12px 28px rgba(0,0,0,0.4)", display: "flex", flexDirection: "column", gap: "2px",
+    maxHeight: "260px", overflowY: "auto"
   },
   dropdownOption: {
     display: "flex", alignItems: "center", gap: "9px", padding: "8px 10px", borderRadius: "8px",
@@ -247,6 +271,7 @@ const styles = {
     padding: "5px", borderRadius: "6px", color: theme.mutedDim
   },
   entryDate: { color: theme.mutedDim, fontSize: "11px", letterSpacing: "0.5px", marginBottom: "8px", textTransform: "uppercase" },
+  entrySubject: { fontFamily: theme.serif, fontWeight: 700, fontSize: "15px", color: theme.cream, marginBottom: "6px" },
   entryText: { color: theme.cream, fontSize: "14px", lineHeight: 1.6, margin: 0, whiteSpace: "pre-wrap" }
 };
 

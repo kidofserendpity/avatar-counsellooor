@@ -120,7 +120,7 @@ function HomeView({ apiBase, onNavigate }) {
           </div>
           <div>
             <div style={styles.talkLabel}>Talk</div>
-            <div style={styles.talkSub}>Real conversation, out loud or typed — whenever you want it</div>
+            <div style={styles.talkSub}>Rant, text, vibe, talk with A.R.I.A, out loud or lowkey, whenever you want. </div>
           </div>
         </button>
 
@@ -163,7 +163,7 @@ function HomeView({ apiBase, onNavigate }) {
         <div style={{ ...styles.recentSection, gridArea: isMobile ? "auto" : "recent", animation: "fadeUp 0.5s ease 0.25s backwards" }}>
           <div style={styles.sectionLabel}>RECENT JOURNAL ENTRIES</div>
           {recent.length === 0 ? (
-            <p style={styles.emptyState}>Nothing written yet — the Journal is one tab away whenever you want it.</p>
+            <p style={styles.emptyState}>Nothing here yet, your journal is one tab away whenever you want it.</p>
           ) : (
             <div style={styles.recentGrid}>
               {recent.map((entry) => (

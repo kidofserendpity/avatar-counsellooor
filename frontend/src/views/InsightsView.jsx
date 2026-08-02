@@ -32,7 +32,7 @@ function InsightsView({ apiBase }) {
   return (
     <div style={styles.wrap}>
       <h1 style={styles.title}>Insights</h1>
-      <p style={styles.sub}>A quiet look at the pattern, not a scoreboard.</p>
+      <p style={styles.sub}>A quiet look at your journaling and mood pattern</p>
 
       <div style={styles.statRow}>
         <div style={styles.statCard}>

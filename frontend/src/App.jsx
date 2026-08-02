@@ -20,6 +20,10 @@ const THEME_STORAGE_KEY = "aria-theme-mode";
 const LIVE_PROMPT_KEY = "aria-live-prompt-dismissed";
 const ONBOARDING_KEY = "aria-onboarding-done";
 const AMBIENT_KEY = "aria-ambient-background";
+const VALID_VIEWS = ["home", "talk", "journal", "insights", "settings", "breathe"];
+
+const SILENCE_CHECKIN_MS = 25000;
+const SILENCE_TIMEOUT_MS = 20000;
 
 refreshUserIdHeader();
 
@@ -31,8 +35,32 @@ function getLivePromptDismissed() {
   }
 }
 
-function attachSilenceDetector(stream, onSilence, options = {}) {
-  const { silenceThreshold = 0.02, silenceDuration = 1200, minSpeakingDuration = 700 } = options;
+function getViewFromHash() {
+  const hash = window.location.hash.replace("#", "");
+  return VALID_VIEWS.includes(hash) ? hash : "home";
+}
+
+const HALLUCINATION_PATTERNS = [
+  /^you\.?$/i,
+  /^bye\.?$/i,
+  /^thank you\.?$/i,
+  /^thanks for watching\.?!?$/i,
+  /^thank you for watching\.?!?$/i,
+  /^please subscribe\.?!?$/i,
+  /^see you next time\.?!?$/i,
+  /^\W*$/
+];
+
+function isLikelyHallucination(text) {
+  const trimmed = text.trim();
+  if (trimmed.length === 0) return true;
+  const wordCount = trimmed.split(/\s+/).length;
+  if (wordCount > 4) return false;
+  return HALLUCINATION_PATTERNS.some((pattern) => pattern.test(trimmed));
+}
+
+function attachSpeechMonitor(stream, hasSpeechRef, options = {}) {
+  const { speechThreshold = 0.02, silenceDuration = 1200, minSpeakingDuration = 700, onAutoStop = null } = options;
   const AudioCtx = window.AudioContext || window.webkitAudioContext;
   const audioContext = new AudioCtx();
   const source = audioContext.createMediaStreamSource(stream);
@@ -64,15 +92,21 @@ function attachSilenceDetector(stream, onSilence, options = {}) {
     const rms = Math.sqrt(sumSquares / data.length);
     const elapsed = Date.now() - startTime;
 
-    if (rms < silenceThreshold && elapsed > minSpeakingDuration) {
-      if (silenceStart === null) silenceStart = Date.now();
-      if (Date.now() - silenceStart >= silenceDuration) {
-        cleanup();
-        onSilence();
-        return;
+    if (rms >= speechThreshold) {
+      hasSpeechRef.current = true;
+    }
+
+    if (onAutoStop) {
+      if (rms < speechThreshold && elapsed > minSpeakingDuration) {
+        if (silenceStart === null) silenceStart = Date.now();
+        if (Date.now() - silenceStart >= silenceDuration) {
+          cleanup();
+          onAutoStop();
+          return;
+        }
+      } else {
+        silenceStart = null;
       }
-    } else {
-      silenceStart = null;
     }
     rafId = requestAnimationFrame(check);
   };
@@ -91,7 +125,7 @@ function App() {
       return true;
     }
   });
-  const [activeView, setActiveView] = useState("home");
+  const [activeView, setActiveView] = useState(() => getViewFromHash());
 
   const [message, setMessage] = useState("");
   const [conversation, setConversation] = useState([]);
@@ -123,7 +157,8 @@ function App() {
   const audioChunksRef = useRef([]);
   const audioRef = useRef(null);
   const conversationRef = useRef(conversation);
-  const silenceCleanupRef = useRef(null);
+  const speechMonitorCleanupRef = useRef(null);
+  const hasSpeechRef = useRef(false);
   const liveModeRef = useRef(liveMode);
   const recordingRef = useRef(recording);
   const loadingRef = useRef(loading);
@@ -133,6 +168,8 @@ function App() {
   const requestIdRef = useRef(0);
   const pendingInterruptRef = useRef(false);
   const hasShownLivePromptRef = useRef(false);
+  const watchdogTimerRef = useRef(null);
+  const checkinStageRef = useRef(0);
 
   useEffect(() => { conversationRef.current = conversation; }, [conversation]);
   useEffect(() => { liveModeRef.current = liveMode; }, [liveMode]);
@@ -150,6 +187,32 @@ function App() {
     }
   }, [themeMode]);
 
+  // Everything referenced here (refs, setState setters, module-level
+  // functions) is stable, so this effect's empty deps array is already
+  // correct — no disable comment needed.
+  useEffect(() => {
+    if (!window.location.hash) {
+      window.location.hash = "home";
+    }
+    const handleHashChange = () => {
+      const view = getViewFromHash();
+      setActiveView(view);
+      if (view === "talk" && !hasShownLivePromptRef.current) {
+        hasShownLivePromptRef.current = true;
+        if (!getLivePromptDismissed()) {
+          setShowLivePrompt(true);
+        }
+      }
+    };
+    window.addEventListener("hashchange", handleHashChange);
+    return () => window.removeEventListener("hashchange", handleHashChange);
+  }, []);
+
+  const navigateTo = (view) => {
+    if (window.location.hash.replace("#", "") === view) return;
+    window.location.hash = view;
+  };
+
   const handleSetAmbientBackground = (value) => {
     setAmbientBackground(value);
     try {
@@ -162,16 +225,6 @@ function App() {
   const finishOnboarding = () => {
     try { localStorage.setItem(ONBOARDING_KEY, "true"); } catch { /* ignore */ }
     setOnboardingDone(true);
-  };
-
-  const navigateTo = (view) => {
-    setActiveView(view);
-    if (view === "talk" && !hasShownLivePromptRef.current) {
-      hasShownLivePromptRef.current = true;
-      if (!getLivePromptDismissed()) {
-        setShowLivePrompt(true);
-      }
-    }
   };
 
   const handleLiveChoice = (startLive, dontAskAgain) => {
@@ -208,9 +261,47 @@ function App() {
     pendingInterruptRef.current = true;
   };
 
+  const scheduleWatchdog = () => {
+    clearTimeout(watchdogTimerRef.current);
+    if (!liveModeRef.current) return;
+    const delay = checkinStageRef.current === 0 ? SILENCE_CHECKIN_MS : SILENCE_TIMEOUT_MS;
+    watchdogTimerRef.current = setTimeout(() => {
+      if (!liveModeRef.current) return;
+      if (recordingRef.current || loadingRef.current || speakingRef.current || imageLoadingRef.current) {
+        scheduleWatchdog();
+        return;
+      }
+      if (checkinStageRef.current === 0) {
+        checkinStageRef.current = 1;
+        performLiveCheckIn();
+      } else {
+        setLiveMode(false);
+      }
+    }, delay);
+  };
+
+  const performLiveCheckIn = async () => {
+    try {
+      const res = await axios.post(`${API_BASE}/api/live-checkin`, { conversationHistory: conversationRef.current });
+      const aiResponse = res.data.response;
+      const audioUrl = res.data.audioUrl;
+      setConversation((prev) => [...prev, { role: "assistant", content: aiResponse }]);
+      speak(audioUrl);
+    } catch (err) {
+      console.error("Live check-in failed:", err);
+    } finally {
+      scheduleWatchdog();
+    }
+  };
+
   const sendMessage = async (overrideText) => {
     const textToSend = (overrideText ?? message).trim();
     if (!textToSend) return;
+
+    if (liveModeRef.current) {
+      checkinStageRef.current = 0;
+      scheduleWatchdog();
+    }
 
     const interrupted = speakingRef.current || loadingRef.current || pendingInterruptRef.current;
     pendingInterruptRef.current = false;
@@ -285,20 +376,29 @@ function App() {
     }
   };
 
-  const startRecording = async (live = false) => {
-    const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
+  // Function declarations (hoisted) instead of const arrow functions —
+  // that's what lets the effects above safely reference them even though
+  // those effects appear earlier in the file.
+  async function startRecording(live = false) {
+    const stream = await navigator.mediaDevices.getUserMedia({
+      audio: { echoCancellation: true, noiseSuppression: true, autoGainControl: true }
+    });
     mediaRecorderRef.current = new MediaRecorder(stream);
     audioChunksRef.current = [];
+    hasSpeechRef.current = false;
 
     mediaRecorderRef.current.ondataavailable = (e) => {
       audioChunksRef.current.push(e.data);
     };
 
     mediaRecorderRef.current.onstop = async () => {
-      if (silenceCleanupRef.current) {
-        silenceCleanupRef.current();
-        silenceCleanupRef.current = null;
+      if (speechMonitorCleanupRef.current) {
+        speechMonitorCleanupRef.current();
+        speechMonitorCleanupRef.current = null;
       }
+
+      if (!hasSpeechRef.current) return;
+
       const audioBlob = new Blob(audioChunksRef.current, { type: "audio/webm" });
       const formData = new FormData();
       formData.append("audio", audioBlob, "recording.webm");
@@ -306,12 +406,13 @@ function App() {
         setLoading(true);
         const res = await axios.post(`${API_BASE}/api/transcribe`, formData);
         const transcript = res.data.transcript;
-        if (transcript && transcript.trim()) {
+        if (transcript && transcript.trim() && !isLikelyHallucination(transcript)) {
           await sendMessage(transcript);
+        } else {
+          setLoading(false);
         }
       } catch (error) {
         console.error("Transcription error:", error);
-      } finally {
         setLoading(false);
       }
     };
@@ -319,23 +420,25 @@ function App() {
     mediaRecorderRef.current.start();
     setRecording(true);
 
-    if (live) {
-      silenceCleanupRef.current = attachSilenceDetector(stream, () => {
-        if (mediaRecorderRef.current && mediaRecorderRef.current.state !== "inactive") {
-          stopRecording();
-        }
-      });
-    }
-  };
+    speechMonitorCleanupRef.current = attachSpeechMonitor(stream, hasSpeechRef, {
+      onAutoStop: live ? () => stopRecording() : null
+    });
+  }
 
-  const stopRecording = () => {
+  function stopRecording() {
     if (mediaRecorderRef.current && mediaRecorderRef.current.state !== "inactive") {
       mediaRecorderRef.current.stop();
     }
     setRecording(false);
-  };
+  }
 
   useEffect(() => {
+    if (liveMode) {
+      checkinStageRef.current = 0;
+      scheduleWatchdog();
+    } else {
+      clearTimeout(watchdogTimerRef.current);
+    }
     if (liveMode && !recordingRef.current && !loadingRef.current && !speakingRef.current && !imageLoadingRef.current) {
       startRecording(true);
     }

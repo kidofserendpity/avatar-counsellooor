@@ -6,7 +6,7 @@ const { execFile } = require('child_process');
 const path = require('path');
 require('dotenv').config();
 
-const { getTherapeuticResponse, getCrisisResponse, extractMemoryAndStyle } = require('./dialogue');
+const { getTherapeuticResponse, getCrisisResponse, extractMemoryAndStyle, getLiveCheckInLine } = require('./dialogue');
 const { detectExplicitCrisis } = require('./crisis');
 const { transcribeAudio } = require('./transcribe');
 const { getImageReaction, extractVisualFact } = require('./vision');
@@ -102,21 +102,22 @@ app.get('/api/journal', (req, res) => {
 app.post('/api/journal', async (req, res) => {
   try {
     const userId = getUserId(req);
-    const { text } = req.body;
+    const { text, category, subject } = req.body;
     if (!text || !text.trim()) {
       return res.status(400).json({ error: 'Entry text is required' });
     }
 
-    const { fact, category } = await extractJournalFact(text.trim());
-
     const entries = loadJournal(userId);
-    const { entries: updatedEntries, entry } = addEntry(entries, text.trim(), category);
+    const { entries: updatedEntries, entry } = addEntry(entries, text.trim(), category, subject);
     saveJournal(userId, updatedEntries);
 
-    if (fact) {
-      const memory = loadMemory(userId);
-      saveMemory(userId, addJournalFact(memory, fact));
-    }
+    extractJournalFact(text.trim())
+      .then((fact) => {
+        if (!fact) return;
+        const memory = loadMemory(userId);
+        saveMemory(userId, addJournalFact(memory, fact));
+      })
+      .catch((err) => console.error('Journal fact update failed:', err.message));
 
     res.json({ entry });
   } catch (error) {
@@ -183,6 +184,25 @@ app.delete('/api/reset-all', (req, res) => {
   } catch (error) {
     console.error('Reset all error:', error.message);
     res.status(500).json({ error: 'Could not reset' });
+  }
+});
+
+app.post('/api/live-checkin', async (req, res) => {
+  try {
+    const { conversationHistory } = req.body;
+    const reply = await getLiveCheckInLine(conversationHistory || []);
+    const audioFileName = `speech_${Date.now()}.mp3`;
+    const audioFilePath = path.join(__dirname, 'public', 'audio', audioFileName);
+    execFile('python', ['generate_speech.py', reply, audioFilePath], (error) => {
+      if (error) {
+        console.error('TTS generation error:', error);
+        return res.json({ response: reply, audioUrl: null });
+      }
+      res.json({ response: reply, audioUrl: `/audio/${audioFileName}` });
+    });
+  } catch (error) {
+    console.error('Live check-in error:', error.message);
+    res.status(500).json({ error: 'Could not generate check-in' });
   }
 });
 

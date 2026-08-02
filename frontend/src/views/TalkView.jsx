@@ -35,6 +35,7 @@ function TalkView({
   const [elapsed, setElapsed] = useState(0);
   const [dragActive, setDragActive] = useState(false);
   const [absorbPreview, setAbsorbPreview] = useState(null);
+  const [hoveredButton, setHoveredButton] = useState(null);
   const videoRef = useRef(null);
   const video2Ref = useRef(null);
   const chatEndRef = useRef(null);
@@ -148,6 +149,8 @@ function TalkView({
 
   const canInterrupt = speaking || loading;
 
+  const buttonGlow = (id, color) => (hoveredButton === id ? { boxShadow: `0 0 0 1px ${color}, 0 0 14px 1px ${color}88` } : {});
+
   return (
     <div style={styles.wrap} onDrop={handleDrop} onDragOver={handleDragOver} onDragLeave={handleDragLeave}>
       <div style={styles.header}>
@@ -218,7 +221,7 @@ function TalkView({
       {showTranscript && (
         <div style={{ ...styles.chatBox, height: isMobile ? "260px" : "300px" }}>
           {conversation.length === 0 && !loading && (
-            <p style={styles.emptyState}>Nothing here yet — say whatever's on your mind, or drop a photo on the orb.</p>
+            <p style={styles.emptyState}>Get to know A.R.I.A, say whatever's on your mind, share memes...anything.</p>
           )}
           {conversation.map((msg, index) => (
             <div key={index} style={{
@@ -247,12 +250,19 @@ function TalkView({
 
       <div style={styles.inputDock}>
         <button
-          style={{ ...styles.micButton, backgroundColor: recording ? theme.crisis : theme.bgElevated, borderColor: recording ? theme.crisis : theme.border }}
+          style={{ ...styles.micButton, backgroundColor: recording ? theme.crisis : theme.bgElevated, borderColor: recording ? theme.crisis : theme.border, ...buttonGlow("mic", recording ? theme.crisis : theme.purple) }}
+          onMouseEnter={() => setHoveredButton("mic")}
+          onMouseLeave={() => setHoveredButton(null)}
           onClick={recording ? stopRecording : () => startRecording(false)}
         >
           {recording ? <Square size={16} fill="currentColor" /> : <Mic size={16} />}
         </button>
-        <button style={styles.cameraButton} onClick={() => fileInputRef.current?.click()}>
+        <button
+          style={{ ...styles.cameraButton, ...buttonGlow("camera", theme.teal) }}
+          onMouseEnter={() => setHoveredButton("camera")}
+          onMouseLeave={() => setHoveredButton(null)}
+          onClick={() => fileInputRef.current?.click()}
+        >
           <Camera size={16} />
         </button>
         <input
@@ -272,7 +282,14 @@ function TalkView({
           onKeyDown={(e) => e.key === "Enter" && sendMessage()}
           placeholder="Say anything…"
         />
-        <button style={styles.sendButton} onClick={() => sendMessage()}>Send</button>
+        <button
+          style={{ ...styles.sendButton, ...buttonGlow("send", theme.purple) }}
+          onMouseEnter={() => setHoveredButton("send")}
+          onMouseLeave={() => setHoveredButton(null)}
+          onClick={() => sendMessage()}
+        >
+          Send
+        </button>
       </div>
     </div>
   );
@@ -343,10 +360,10 @@ const styles = {
   typingDots: { display: "flex", gap: "4px", padding: "2px 0" },
   typingDot: { width: "6px", height: "6px", borderRadius: "50%", backgroundColor: theme.purple, animation: "typingBounce 1s ease-in-out infinite" },
   inputDock: { display: "flex", width: "100%", gap: "8px" },
-  micButton: { display: "flex", alignItems: "center", justifyContent: "center", padding: "10px 14px", color: theme.cream, border: `1px solid ${theme.border}`, borderRadius: "12px", cursor: "pointer", backgroundColor: theme.bgElevated },
-  cameraButton: { display: "flex", alignItems: "center", justifyContent: "center", padding: "10px 14px", color: theme.cream, border: `1px solid ${theme.border}`, borderRadius: "12px", cursor: "pointer", backgroundColor: theme.bgElevated },
+  micButton: { display: "flex", alignItems: "center", justifyContent: "center", padding: "10px 14px", color: theme.cream, border: `1px solid ${theme.border}`, borderRadius: "12px", cursor: "pointer", backgroundColor: theme.bgElevated, transition: "box-shadow 0.2s ease" },
+  cameraButton: { display: "flex", alignItems: "center", justifyContent: "center", padding: "10px 14px", color: theme.cream, border: `1px solid ${theme.border}`, borderRadius: "12px", cursor: "pointer", backgroundColor: theme.bgElevated, transition: "box-shadow 0.2s ease" },
   input: { flex: 1, minWidth: 0, padding: "10px 14px", borderRadius: "12px", border: `1px solid ${theme.border}`, backgroundColor: theme.bgElevated, color: theme.cream, fontSize: "15px", outline: "none" },
-  sendButton: { padding: "10px 18px", background: `linear-gradient(135deg, ${theme.purple}, ${theme.teal})`, color: "#120e1c", fontWeight: 600, border: "none", borderRadius: "12px", cursor: "pointer", fontSize: "15px" }
+  sendButton: { padding: "10px 18px", background: `linear-gradient(135deg, ${theme.purple}, ${theme.teal})`, color: "#120e1c", fontWeight: 600, border: "none", borderRadius: "12px", cursor: "pointer", fontSize: "15px", transition: "box-shadow 0.2s ease" }
 };
 
 export default TalkView;

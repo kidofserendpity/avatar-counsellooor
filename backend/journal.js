@@ -38,10 +38,11 @@ function clearJournal(userId) {
 
 const VALID_CATEGORIES = ['reflection', 'gratitude', 'venting', 'goal', 'dream', 'memory', 'worry', 'other'];
 
-function addEntry(entries, text, category = 'other') {
+function addEntry(entries, text, category = 'other', subject = '') {
   const safeCategory = VALID_CATEGORIES.includes(category) ? category : 'other';
   const entry = {
     id: `${Date.now()}`,
+    subject: subject ? subject.trim() : '',
     text,
     timestamp: Date.now(),
     category: safeCategory,
@@ -58,18 +59,13 @@ function setArchived(entries, id, archived) {
   return entries.map((e) => (e.id === id ? { ...e, archived } : e));
 }
 
-const JOURNAL_FACT_PROMPT = `You're reviewing something a person just wrote in their private journal, for two separate purposes.
+const JOURNAL_FACT_PROMPT = `You're reviewing something a person just wrote in their private journal. Decide if it reveals a specific, durable fact worth Aria quietly knowing for future conversations — a situation, relationship, plan, recurring feeling, or strong opinion. Not a passing mood.
 
-1. FACT: Decide if it reveals a specific, durable fact worth Aria quietly knowing for future conversations — a situation, relationship, plan, recurring feeling, or strong opinion. Not a passing mood. If yes, state it plainly, third person, under 15 words. If not, or if it's too personal/raw to summarize respectfully in one line, write NONE.
+If yes, state it plainly, third person, under 15 words. If not, or if it's too personal/raw to summarize respectfully in one line, write NONE — it's fine for Aria to simply know a journal entry exists without extracting details from it.
 
-2. CATEGORY: Classify the overall theme of the entry as exactly one of: reflection, gratitude, venting, goal, dream, memory, worry, other.
-
-Respond in exactly this format, two lines, nothing else:
-FACT: <fact or NONE>
-CATEGORY: <one of the categories above>`;
+Respond with only the fact sentence or NONE, nothing else.`;
 
 const extractJournalFact = async (text) => {
-  const defaults = { fact: null, category: 'other' };
   try {
     const completion = await groq.chat.completions.create({
       model: 'openai/gpt-oss-120b',
@@ -77,22 +73,14 @@ const extractJournalFact = async (text) => {
         { role: 'system', content: JOURNAL_FACT_PROMPT },
         { role: 'user', content: text }
       ],
-      max_tokens: 60,
+      max_tokens: 40,
       temperature: 0.3,
     });
-
-    const raw = completion.choices[0].message.content.trim();
-    const factMatch = raw.match(/FACT:\s*(.+)/i);
-    const categoryMatch = raw.match(/CATEGORY:\s*(reflection|gratitude|venting|goal|dream|memory|worry|other)/i);
-    const factText = factMatch ? factMatch[1].trim() : 'NONE';
-
-    return {
-      fact: (factText === 'NONE' || factText.length < 3) ? null : factText,
-      category: categoryMatch ? categoryMatch[1].toLowerCase() : defaults.category
-    };
+    const fact = completion.choices[0].message.content.trim();
+    return (fact === 'NONE' || fact.length < 3) ? null : fact;
   } catch (err) {
     console.error('Journal fact extraction failed:', err.message);
-    return defaults;
+    return null;
   }
 };
 
