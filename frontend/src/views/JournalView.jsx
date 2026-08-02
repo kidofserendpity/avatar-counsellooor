@@ -1,6 +1,6 @@
-import { useEffect, useState, useCallback } from "react";
+import { useEffect, useState, useCallback, useRef } from "react";
 import axios from "axios";
-import { Lightbulb, Heart, Flame, Target, Moon, Image, CloudRain, FileText, Archive, ArchiveRestore, Trash2 } from "lucide-react";
+import { Lightbulb, Heart, Flame, Target, Moon, Image, CloudRain, FileText, Archive, ArchiveRestore, Trash2, ChevronDown, Check } from "lucide-react";
 import { theme } from "../theme";
 
 const CATEGORY_META = {
@@ -13,6 +13,49 @@ const CATEGORY_META = {
   worry: { label: "Worry", Icon: CloudRain, color: "#8b95a8" },
   other: { label: "Other", Icon: FileText, color: "#6b6578" }
 };
+
+function CategoryDropdown({ value, onChange }) {
+  const [open, setOpen] = useState(false);
+  const ref = useRef(null);
+
+  const current = value === "all" ? { label: "All categories", Icon: null, color: theme.muted } : CATEGORY_META[value];
+  const CurrentIcon = current.Icon;
+
+  return (
+    <div style={styles.dropdownWrap} ref={ref}>
+      <button style={styles.dropdownButton} onClick={() => setOpen((o) => !o)}>
+        {CurrentIcon ? <CurrentIcon size={14} color={current.color} /> : null}
+        <span>{current.label}</span>
+        <ChevronDown size={14} color={theme.mutedDim} style={{ marginLeft: "4px", transform: open ? "rotate(180deg)" : "none", transition: "transform 0.15s ease" }} />
+      </button>
+      {open && (
+        <>
+          <div style={styles.dropdownBackdrop} onClick={() => setOpen(false)} />
+          <div style={styles.dropdownPanel}>
+            <button
+              style={{ ...styles.dropdownOption, ...(value === "all" ? styles.dropdownOptionActive : {}) }}
+              onClick={() => { onChange("all"); setOpen(false); }}
+            >
+              <span style={styles.dropdownOptionLabel}>All categories</span>
+              {value === "all" && <Check size={14} color={theme.purpleBright} />}
+            </button>
+            {Object.entries(CATEGORY_META).map(([key, meta]) => (
+              <button
+                key={key}
+                style={{ ...styles.dropdownOption, ...(value === key ? styles.dropdownOptionActive : {}) }}
+                onClick={() => { onChange(key); setOpen(false); }}
+              >
+                <meta.Icon size={14} color={meta.color} />
+                <span style={styles.dropdownOptionLabel}>{meta.label}</span>
+                {value === key && <Check size={14} color={theme.purpleBright} />}
+              </button>
+            ))}
+          </div>
+        </>
+      )}
+    </div>
+  );
+}
 
 function JournalView({ apiBase }) {
   const [entries, setEntries] = useState([]);
@@ -72,106 +115,123 @@ function JournalView({ apiBase }) {
 
   return (
     <div style={styles.wrap}>
-      <h1 style={styles.title}>Journal</h1>
-      <p style={styles.sub}>
-        Private writing space. A.R.I.A can talk with you about anything here if you bring it up — she won't raise it on her own.
-      </p>
+      <div style={styles.layout}>
+        <div style={styles.composerColumn}>
+          <h1 style={styles.title}>Journal</h1>
+          <p style={styles.sub}>
+            Private writing space. A.R.I.A can talk with you about anything here if you bring it up — she won't raise it on her own.
+          </p>
+          <div style={styles.composer}>
+            <textarea
+              style={styles.textarea}
+              value={draft}
+              onChange={(e) => setDraft(e.target.value)}
+              placeholder="Write whatever you need to get out…"
+              rows={9}
+            />
+            <button style={styles.saveButton} onClick={saveEntry} disabled={saving || !draft.trim()}>
+              {saving ? "Saving…" : "Save entry"}
+            </button>
+          </div>
+        </div>
 
-      <div style={styles.composer}>
-        <textarea
-          style={styles.textarea}
-          value={draft}
-          onChange={(e) => setDraft(e.target.value)}
-          placeholder="Write whatever you need to get out…"
-          rows={6}
-        />
-        <button style={styles.saveButton} onClick={saveEntry} disabled={saving || !draft.trim()}>
-          {saving ? "Saving…" : "Save entry"}
-        </button>
-      </div>
+        <div style={styles.entriesColumn}>
+          <div style={styles.controlsRow}>
+            <CategoryDropdown value={categoryFilter} onChange={setCategoryFilter} />
+            <button
+              style={{ ...styles.archiveToggle, ...(showArchived ? styles.archiveToggleActive : {}) }}
+              onClick={() => setShowArchived((s) => !s)}
+            >
+              {showArchived ? "Showing archived" : "Show archived"}
+            </button>
+          </div>
 
-      <div style={styles.controlsRow}>
-        <select style={styles.filterSelect} value={categoryFilter} onChange={(e) => setCategoryFilter(e.target.value)}>
-          <option value="all">All categories</option>
-          {Object.entries(CATEGORY_META).map(([key, meta]) => (
-            <option key={key} value={key}>{meta.label}</option>
-          ))}
-        </select>
-        <button
-          style={{ ...styles.archiveToggle, ...(showArchived ? styles.archiveToggleActive : {}) }}
-          onClick={() => setShowArchived((s) => !s)}
-        >
-          {showArchived ? "Showing archived" : "Show archived"}
-        </button>
-      </div>
+          {loaded && visible.length === 0 && (
+            <p style={styles.emptyState}>
+              {showArchived ? "No archived entries." : "Nothing here yet — your first one starts on the left."}
+            </p>
+          )}
 
-      {loaded && visible.length === 0 && (
-        <p style={styles.emptyState}>
-          {showArchived ? "No archived entries." : "Nothing here yet — your first one starts the page above."}
-        </p>
-      )}
-
-      <div style={styles.entryList}>
-        {visible.map((entry) => {
-          const meta = CATEGORY_META[entry.category] || CATEGORY_META.other;
-          const CategoryIcon = meta.Icon;
-          return (
-            <div key={entry.id} style={styles.entryCard}>
-              <div style={styles.entryHeader}>
-                <div style={{ ...styles.categoryChip, color: meta.color, borderColor: meta.color }}>
-                  <CategoryIcon size={12} />
-                  {meta.label}
+          <div style={styles.entryGrid}>
+            {visible.map((entry) => {
+              const meta = CATEGORY_META[entry.category] || CATEGORY_META.other;
+              const CategoryIcon = meta.Icon;
+              return (
+                <div key={entry.id} style={styles.entryCard}>
+                  <div style={styles.entryHeader}>
+                    <div style={{ ...styles.categoryChip, color: meta.color, borderColor: meta.color }}>
+                      <CategoryIcon size={12} />
+                      {meta.label}
+                    </div>
+                    <div style={styles.entryActions}>
+                      <button style={styles.iconButton} onClick={() => toggleArchive(entry.id, entry.archived)} title={entry.archived ? "Unarchive" : "Archive"}>
+                        {entry.archived ? <ArchiveRestore size={15} /> : <Archive size={15} />}
+                      </button>
+                      <button style={styles.iconButton} onClick={() => deleteEntry(entry.id)} title="Delete">
+                        <Trash2 size={15} />
+                      </button>
+                    </div>
+                  </div>
+                  <div style={styles.entryDate}>
+                    {new Date(entry.timestamp).toLocaleDateString(undefined, { weekday: "short", month: "short", day: "numeric" })}
+                  </div>
+                  <p style={styles.entryText}>{entry.text}</p>
                 </div>
-                <div style={styles.entryActions}>
-                  <button style={styles.iconButton} onClick={() => toggleArchive(entry.id, entry.archived)} title={entry.archived ? "Unarchive" : "Archive"}>
-                    {entry.archived ? <ArchiveRestore size={15} /> : <Archive size={15} />}
-                  </button>
-                  <button style={styles.iconButton} onClick={() => deleteEntry(entry.id)} title="Delete">
-                    <Trash2 size={15} />
-                  </button>
-                </div>
-              </div>
-              <div style={styles.entryDate}>
-                {new Date(entry.timestamp).toLocaleDateString(undefined, { weekday: "short", month: "short", day: "numeric" })}
-              </div>
-              <p style={styles.entryText}>{entry.text}</p>
-            </div>
-          );
-        })}
+              );
+            })}
+          </div>
+        </div>
       </div>
     </div>
   );
 }
 
 const styles = {
-  wrap: { maxWidth: "700px" },
+  wrap: { maxWidth: "1040px", width: "100%", boxSizing: "border-box" },
+  layout: { display: "flex", gap: "32px", alignItems: "flex-start", flexWrap: "wrap" },
+  composerColumn: { flex: "1 1 340px", minWidth: "300px", position: "sticky", top: "0" },
+  entriesColumn: { flex: "2 1 480px", minWidth: "300px" },
   title: { fontFamily: theme.serif, fontSize: "30px", color: theme.cream, margin: 0 },
-  sub: { color: theme.muted, fontSize: "14px", marginTop: "6px", marginBottom: "24px", lineHeight: 1.5 },
+  sub: { color: theme.muted, fontSize: "14px", marginTop: "6px", marginBottom: "20px", lineHeight: 1.5 },
   composer: {
     backgroundColor: theme.panel, border: `1px solid ${theme.border}`, borderRadius: "16px",
-    padding: "16px", display: "flex", flexDirection: "column", gap: "12px", marginBottom: "20px"
+    padding: "16px", display: "flex", flexDirection: "column", gap: "12px"
   },
   textarea: {
     resize: "vertical", backgroundColor: "transparent", border: "none", outline: "none",
-    color: theme.cream, fontSize: "15px", lineHeight: 1.6, fontFamily: theme.sans, minHeight: "120px"
+    color: theme.cream, fontSize: "15px", lineHeight: 1.6, fontFamily: theme.sans, minHeight: "180px"
   },
   saveButton: {
     alignSelf: "flex-end", padding: "10px 20px",
     background: `linear-gradient(135deg, ${theme.rose}, ${theme.roseDeep})`,
     color: "#1c0f12", fontWeight: 600, border: "none", borderRadius: "10px", cursor: "pointer", fontSize: "14px"
   },
-  controlsRow: { display: "flex", flexWrap: "wrap", gap: "10px", marginBottom: "16px", alignItems: "center" },
-  filterSelect: {
-    padding: "8px 12px", borderRadius: "10px", border: `1px solid ${theme.border}`,
-    backgroundColor: theme.bgElevated, color: theme.cream, fontSize: "13px"
+  controlsRow: { display: "flex", flexWrap: "wrap", gap: "10px", marginBottom: "18px", alignItems: "center" },
+  dropdownWrap: { position: "relative" },
+  dropdownButton: {
+    display: "flex", alignItems: "center", gap: "8px", padding: "9px 14px", borderRadius: "10px",
+    border: `1px solid ${theme.border}`, backgroundColor: theme.bgElevated, color: theme.cream,
+    fontSize: "13px", cursor: "pointer"
   },
+  dropdownBackdrop: { position: "fixed", inset: 0, zIndex: 40 },
+  dropdownPanel: {
+    position: "absolute", top: "calc(100% + 6px)", left: 0, minWidth: "180px", zIndex: 50,
+    backgroundColor: theme.bgElevated, border: `1px solid ${theme.border}`, borderRadius: "12px",
+    padding: "6px", boxShadow: "0 12px 28px rgba(0,0,0,0.4)", display: "flex", flexDirection: "column", gap: "2px"
+  },
+  dropdownOption: {
+    display: "flex", alignItems: "center", gap: "9px", padding: "8px 10px", borderRadius: "8px",
+    border: "none", backgroundColor: "transparent", cursor: "pointer", textAlign: "left"
+  },
+  dropdownOptionActive: { backgroundColor: "rgba(155,107,255,0.12)" },
+  dropdownOptionLabel: { color: theme.cream, fontSize: "13px", flex: 1 },
   archiveToggle: {
     padding: "8px 14px", borderRadius: "999px", border: `1px solid ${theme.border}`,
     backgroundColor: "transparent", color: theme.muted, fontSize: "13px", cursor: "pointer"
   },
   archiveToggleActive: { backgroundColor: theme.bgElevated, color: theme.purpleBright, borderColor: theme.purple },
   emptyState: { color: theme.mutedDim, fontSize: "13px" },
-  entryList: { display: "flex", flexDirection: "column", gap: "12px" },
+  entryGrid: { display: "grid", gridTemplateColumns: "repeat(auto-fill, minmax(240px, 1fr))", gap: "12px" },
   entryCard: {
     backgroundColor: theme.bgElevated, border: `1px solid ${theme.border}`,
     borderRadius: "14px", padding: "16px 18px"

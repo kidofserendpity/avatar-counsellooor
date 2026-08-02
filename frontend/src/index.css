@@ -139,6 +139,11 @@ button:focus-visible {
   50% { opacity: 1; transform: scale(1.04); }
 }
 
+@keyframes fadeUp {
+  from { opacity: 0; transform: translateY(10px); }
+  to { opacity: 1; transform: translateY(0); }
+}
+
 @keyframes auroraDriftA {
   0%, 100% { transform: translate(-8%, -8%) scale(1); opacity: 0.09; }
   50% { transform: translate(6%, 4%) scale(1.15); opacity: 0.15; }
