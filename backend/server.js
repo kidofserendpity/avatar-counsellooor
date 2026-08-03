@@ -2,6 +2,7 @@ const express = require('express');
 const cors = require('cors');
 const multer = require('multer');
 const fs = require('fs');
+const rateLimit = require('express-rate-limit');
 const { execFile } = require('child_process');
 const path = require('path');
 require('dotenv').config();
@@ -11,6 +12,7 @@ const { detectExplicitCrisis } = require('./crisis');
 const { transcribeAudio } = require('./transcribe');
 const { getImageReaction, extractVisualFact } = require('./vision');
 const { createAccount, verifyLogin, getUsernameByAccountId } = require('./accounts');
+const { stripEmoji } = require('./textUtils');
 const {
   loadMemory,
   saveMemory,
@@ -25,9 +27,13 @@ const {
   clearMemory
 } = require('./memory');
 const { loadJournal, saveJournal, clearJournal, addEntry, deleteEntry, setArchived, extractJournalFact } = require('./journal');
+const { loadFeedback, saveFeedback, addFeedback } = require('./feedback');
+const { appendMessages, searchHistory } = require('./history');
 
 const app = express();
 const PORT = process.env.PORT || 5000;
+
+app.set('trust proxy', 1);
 
 fs.mkdirSync(path.join(__dirname, 'public', 'audio'), { recursive: true });
 fs.mkdirSync(path.join(__dirname, 'uploads'), { recursive: true });
@@ -41,6 +47,28 @@ app.use('/audio', express.static(path.join(__dirname, 'public', 'audio')));
 function getUserId(req) {
   return req.headers['x-user-id'] || req.body.userId || req.query.userId || 'anonymous';
 }
+
+const apiLimiter = rateLimit({
+  windowMs: 15 * 60 * 1000,
+  max: 100,
+  standardHeaders: true,
+  legacyHeaders: false,
+  message: { error: 'Too many requests — please slow down and try again in a few minutes.' }
+});
+
+const authLimiter = rateLimit({
+  windowMs: 15 * 60 * 1000,
+  max: 20,
+  standardHeaders: true,
+  legacyHeaders: false,
+  message: { error: 'Too many attempts — please wait a few minutes and try again.' }
+});
+
+app.use('/api/chat', apiLimiter);
+app.use('/api/chat-image', apiLimiter);
+app.use('/api/transcribe', apiLimiter);
+app.use('/api/live-checkin', apiLimiter);
+app.use('/api/account', authLimiter);
 
 app.get('/', (req, res) => {
   res.json({ message: 'Avatar Counsellor Backend is running!' });
@@ -187,13 +215,45 @@ app.delete('/api/reset-all', (req, res) => {
   }
 });
 
+app.post('/api/feedback', (req, res) => {
+  try {
+    const userId = getUserId(req);
+    const { message, rating } = req.body;
+    if (!message || !message.trim()) {
+      return res.status(400).json({ error: 'Feedback message is required' });
+    }
+    const entries = loadFeedback();
+    const { entries: updated } = addFeedback(entries, { message, rating, userId });
+    saveFeedback(updated);
+    res.json({ success: true });
+  } catch (error) {
+    console.error('Feedback save error:', error.message);
+    res.status(500).json({ error: 'Could not save feedback' });
+  }
+});
+
+app.get('/api/feedback', (req, res) => {
+  if (!process.env.ADMIN_KEY || req.query.key !== process.env.ADMIN_KEY) {
+    return res.status(401).json({ error: 'Not authorized' });
+  }
+  const entries = loadFeedback();
+  res.json({ entries });
+});
+
+app.get('/api/history', (req, res) => {
+  const userId = getUserId(req);
+  const query = req.query.q || '';
+  const results = searchHistory(userId, query);
+  res.json({ messages: results });
+});
+
 app.post('/api/live-checkin', async (req, res) => {
   try {
     const { conversationHistory } = req.body;
     const reply = await getLiveCheckInLine(conversationHistory || []);
     const audioFileName = `speech_${Date.now()}.mp3`;
     const audioFilePath = path.join(__dirname, 'public', 'audio', audioFileName);
-    execFile('python', ['generate_speech.py', reply, audioFilePath], (error) => {
+    execFile('python', ['generate_speech.py', stripEmoji(reply), audioFilePath], (error) => {
       if (error) {
         console.error('TTS generation error:', error);
         return res.json({ response: reply, audioUrl: null });
@@ -209,7 +269,7 @@ app.post('/api/live-checkin', async (req, res) => {
 function generateCrisisAudioAndRespond(res, replyText, sentiment) {
   const crisisAudioFileName = `speech_${Date.now()}.mp3`;
   const crisisAudioPath = path.join(__dirname, 'public', 'audio', crisisAudioFileName);
-  execFile('python', ['generate_speech.py', replyText, crisisAudioPath], (err) => {
+  execFile('python', ['generate_speech.py', stripEmoji(replyText), crisisAudioPath], (err) => {
     if (err || !fs.existsSync(crisisAudioPath) || fs.statSync(crisisAudioPath).size === 0) {
       console.error('CRISIS AUDIO FAILED — err:', err, '| file exists:', fs.existsSync(crisisAudioPath));
       return res.json({ response: replyText, isCrisis: true, sentiment, audioUrl: null });
@@ -229,6 +289,17 @@ function recordMemoryAsync(userId, userMessage, ariaReply, memory, sentiment) {
       saveMemory(userId, updated);
     })
     .catch((err) => console.error('Memory update failed:', err.message));
+}
+
+function recordHistory(userId, userMessage, ariaReply) {
+  try {
+    appendMessages(userId, [
+      { role: 'user', content: userMessage, timestamp: Date.now() },
+      { role: 'assistant', content: ariaReply, timestamp: Date.now() }
+    ]);
+  } catch (err) {
+    console.error('History append failed:', err.message);
+  }
 }
 
 app.post('/api/chat', async (req, res) => {
@@ -257,6 +328,7 @@ app.post('/api/chat', async (req, res) => {
       const crisisReply = await getCrisisResponse(message, 'explicit', conversationHistory, memoryBlock);
       memory = setCrisisFlag(memory, message);
       recordMemoryAsync(userId, message, crisisReply, memory, 'sad');
+      recordHistory(userId, message, crisisReply);
       return generateCrisisAudioAndRespond(res, crisisReply, 'sad');
     }
 
@@ -266,15 +338,17 @@ app.post('/api/chat', async (req, res) => {
       const crisisReply = await getCrisisResponse(message, 'ambiguous', conversationHistory, memoryBlock);
       memory = setCrisisFlag(memory, message);
       recordMemoryAsync(userId, message, crisisReply, memory, sentiment);
+      recordHistory(userId, message, crisisReply);
       return generateCrisisAudioAndRespond(res, crisisReply, sentiment);
     }
 
     recordMemoryAsync(userId, message, response, memory, sentiment);
+    recordHistory(userId, message, response);
 
     const audioFileName = `speech_${Date.now()}.mp3`;
     const audioFilePath = path.join(__dirname, 'public', 'audio', audioFileName);
 
-    execFile('python', ['generate_speech.py', response, audioFilePath], (error) => {
+    execFile('python', ['generate_speech.py', stripEmoji(response), audioFilePath], (error) => {
       if (error) {
         console.error('TTS generation error:', error);
         return res.json({ response, isCrisis: false, audioUrl: null, sentiment });
@@ -324,6 +398,7 @@ app.post('/api/chat-image', upload.single('image'), async (req, res) => {
       const crisisReply = await getCrisisResponse(caption, 'explicit', conversationHistory, memoryBlock);
       memory = setCrisisFlag(memory, caption);
       saveMemory(userId, memory);
+      recordHistory(userId, caption || '[shared a photo]', crisisReply);
       return generateCrisisAudioAndRespond(res, crisisReply, 'sad');
     }
 
@@ -339,11 +414,12 @@ app.post('/api/chat-image', upload.single('image'), async (req, res) => {
 
     memory.lastMessageTimestamp = Date.now();
     saveMemory(userId, memory);
+    recordHistory(userId, caption || '[shared a photo]', reply);
 
     const audioFileName = `speech_${Date.now()}.mp3`;
     const audioFilePath = path.join(__dirname, 'public', 'audio', audioFileName);
 
-    execFile('python', ['generate_speech.py', reply, audioFilePath], (error) => {
+    execFile('python', ['generate_speech.py', stripEmoji(reply), audioFilePath], (error) => {
       if (error) {
         console.error('TTS generation error:', error);
         return res.json({ response: reply, sentiment, audioUrl: null });

@@ -5,9 +5,11 @@ import BottomNav from "./components/BottomNav";
 import LiveSessionPrompt from "./components/LiveSessionPrompt";
 import AuthGate from "./components/AuthGate";
 import GetToKnowYou from "./components/GetToKnowYou";
+import CrisisResourcesButton from "./components/CrisisResourcesButton";
 import HomeView from "./views/HomeView";
 import TalkView from "./views/TalkView";
 import JournalView from "./views/JournalView";
+import HistoryView from "./views/HistoryView";
 import InsightsView from "./views/InsightsView";
 import SettingsView from "./views/SettingsView";
 import BreatheView from "./views/BreatheView";
@@ -20,7 +22,7 @@ const THEME_STORAGE_KEY = "aria-theme-mode";
 const LIVE_PROMPT_KEY = "aria-live-prompt-dismissed";
 const ONBOARDING_KEY = "aria-onboarding-done";
 const AMBIENT_KEY = "aria-ambient-background";
-const VALID_VIEWS = ["home", "talk", "journal", "insights", "settings", "breathe"];
+const VALID_VIEWS = ["home", "talk", "journal", "history", "insights", "settings", "breathe"];
 
 const SILENCE_CHECKIN_MS = 25000;
 const SILENCE_TIMEOUT_MS = 20000;
@@ -187,9 +189,6 @@ function App() {
     }
   }, [themeMode]);
 
-  // Everything referenced here (refs, setState setters, module-level
-  // functions) is stable, so this effect's empty deps array is already
-  // correct — no disable comment needed.
   useEffect(() => {
     if (!window.location.hash) {
       window.location.hash = "home";
@@ -376,9 +375,6 @@ function App() {
     }
   };
 
-  // Function declarations (hoisted) instead of const arrow functions —
-  // that's what lets the effects above safely reference them even though
-  // those effects appear earlier in the file.
   async function startRecording(live = false) {
     const stream = await navigator.mediaDevices.getUserMedia({
       audio: { echoCancellation: true, noiseSuppression: true, autoGainControl: true }
@@ -479,6 +475,7 @@ function App() {
     switch (activeView) {
       case "talk": return <TalkView {...talkProps} />;
       case "journal": return <JournalView apiBase={API_BASE} />;
+      case "history": return <HistoryView apiBase={API_BASE} />;
       case "insights": return <InsightsView apiBase={API_BASE} />;
       case "settings":
         return (
@@ -495,13 +492,15 @@ function App() {
     }
   };
 
+  const auroraBoost = liveMode;
+
   return (
     <div style={styles.shell}>
       {ambientBackground && (
         <>
-          <div style={styles.auroraA} />
-          <div style={styles.auroraB} />
-          <div style={styles.auroraC} />
+          <div style={{ ...styles.auroraA, opacity: auroraBoost ? 0.4 : 0.22, animationDuration: auroraBoost ? "12s" : "22s" }} />
+          <div style={{ ...styles.auroraB, opacity: auroraBoost ? 0.32 : 0.18, animationDuration: auroraBoost ? "14s" : "26s" }} />
+          <div style={{ ...styles.auroraC, opacity: auroraBoost ? 0.24 : 0.14, animationDuration: auroraBoost ? "16s" : "30s" }} />
         </>
       )}
       {!isMobile && <Sidebar activeView={activeView} onNavigate={navigateTo} />}
@@ -510,6 +509,7 @@ function App() {
       </main>
       {isMobile && <BottomNav activeView={activeView} onNavigate={navigateTo} />}
       {showLivePrompt && <LiveSessionPrompt onChoose={handleLiveChoice} />}
+      <CrisisResourcesButton />
     </div>
   );
 }
@@ -519,17 +519,20 @@ const styles = {
   auroraA: {
     position: "fixed", top: "-20%", left: "-10%", width: "60vw", height: "60vw", borderRadius: "50%",
     background: `radial-gradient(circle, var(--accent-purple), transparent 70%)`,
-    filter: "blur(60px)", animation: "auroraDriftA 22s ease-in-out infinite", pointerEvents: "none", zIndex: 0
+    filter: "blur(60px)", animationName: "auroraDriftA", animationTimingFunction: "ease-in-out", animationIterationCount: "infinite",
+    pointerEvents: "none", zIndex: 0, transition: "opacity 0.6s ease"
   },
   auroraB: {
     position: "fixed", bottom: "-20%", right: "-10%", width: "55vw", height: "55vw", borderRadius: "50%",
     background: `radial-gradient(circle, var(--accent-teal), transparent 70%)`,
-    filter: "blur(70px)", animation: "auroraDriftB 26s ease-in-out infinite", pointerEvents: "none", zIndex: 0
+    filter: "blur(70px)", animationName: "auroraDriftB", animationTimingFunction: "ease-in-out", animationIterationCount: "infinite",
+    pointerEvents: "none", zIndex: 0, transition: "opacity 0.6s ease"
   },
   auroraC: {
     position: "fixed", top: "30%", left: "35%", width: "42vw", height: "42vw", borderRadius: "50%",
     background: `radial-gradient(circle, var(--accent-rose), transparent 70%)`,
-    filter: "blur(80px)", animation: "auroraDriftC 30s ease-in-out infinite", pointerEvents: "none", zIndex: 0
+    filter: "blur(80px)", animationName: "auroraDriftC", animationTimingFunction: "ease-in-out", animationIterationCount: "infinite",
+    pointerEvents: "none", zIndex: 0, transition: "opacity 0.6s ease"
   },
   main: { flex: 1, boxSizing: "border-box", minHeight: "100vh", overflowY: "auto", position: "relative", zIndex: 1 }
 };

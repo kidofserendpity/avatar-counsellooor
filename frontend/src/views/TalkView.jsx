@@ -1,5 +1,5 @@
 import { useState, useRef, useEffect } from "react";
-import { Mic, Square, Camera } from "lucide-react";
+import { Mic, Square, Camera, Send } from "lucide-react";
 import { theme } from "../theme";
 import { useIsMobile } from "../hooks/useIsMobile";
 
@@ -12,11 +12,11 @@ const SENTIMENT_FILTER = {
 };
 
 const GLOW_BY_STATE = {
-  speaking: `0 0 55px 20px rgba(155,107,255,0.5), 0 0 95px 36px rgba(94,234,212,0.28)`,
-  listening: `0 0 42px 15px rgba(155,107,255,0.42)`,
-  thinking: `0 0 30px 10px rgba(155,107,255,0.28)`,
-  seeing: `0 0 48px 16px rgba(94,234,212,0.4), 0 0 20px 6px rgba(155,107,255,0.3)`,
-  idle: `0 0 22px 6px rgba(155,107,255,0.16)`
+  speaking: `0 0 70px 26px rgba(155,107,255,0.5), 0 0 120px 46px rgba(94,234,212,0.28)`,
+  listening: `0 0 55px 20px rgba(155,107,255,0.42)`,
+  thinking: `0 0 40px 14px rgba(155,107,255,0.28)`,
+  seeing: `0 0 60px 20px rgba(94,234,212,0.4), 0 0 26px 8px rgba(155,107,255,0.3)`,
+  idle: `0 0 30px 8px rgba(155,107,255,0.18)`
 };
 
 function formatElapsed(seconds) {
@@ -35,13 +35,12 @@ function TalkView({
   const [elapsed, setElapsed] = useState(0);
   const [dragActive, setDragActive] = useState(false);
   const [absorbPreview, setAbsorbPreview] = useState(null);
-  const [hoveredButton, setHoveredButton] = useState(null);
   const videoRef = useRef(null);
   const video2Ref = useRef(null);
   const chatEndRef = useRef(null);
   const fileInputRef = useRef(null);
 
-  const orbSize = isMobile ? 190 : 280;
+  const orbSize = isMobile ? 240 : 400;
 
   useEffect(() => {
     const timer = setInterval(() => setElapsed((s) => s + 1), 1000);
@@ -149,79 +148,112 @@ function TalkView({
 
   const canInterrupt = speaking || loading;
 
-  const buttonGlow = (id, color) => (hoveredButton === id ? { boxShadow: `0 0 0 1px ${color}, 0 0 14px 1px ${color}88` } : {});
-
   return (
-    <div style={styles.wrap} onDrop={handleDrop} onDragOver={handleDragOver} onDragLeave={handleDragLeave}>
-      <div style={styles.header}>
-        <div>
-          <div style={styles.sessionLabel}>Session</div>
-          <div style={styles.elapsed}>{formatElapsed(elapsed)} elapsed</div>
+    <div style={styles.stage} onDrop={handleDrop} onDragOver={handleDragOver} onDragLeave={handleDragLeave}>
+      <div style={styles.topBar}>
+        <div style={styles.topBarLeft}>
+          {!liveMode && <span style={styles.elapsed}>{formatElapsed(elapsed)}</span>}
         </div>
-        <div style={styles.headerControls}>
+        <div style={styles.topBarRight}>
           <div style={styles.liveToggleWrap}>
             <span style={styles.liveToggleLabel}>Live</span>
             <button
-              style={{ ...styles.toggle, backgroundColor: liveMode ? theme.purple : theme.bgElevated }}
+              style={{ ...styles.toggle, backgroundColor: liveMode ? theme.purple : "rgba(255,255,255,0.08)" }}
               onClick={() => onToggleLive(!liveMode)}
             >
               <span style={{ ...styles.toggleDot, transform: liveMode ? "translateX(18px)" : "translateX(0)" }} />
             </button>
           </div>
           <button style={styles.transcriptToggle} onClick={() => setShowTranscript((s) => !s)}>
-            {showTranscript ? "Hide transcript" : "Show transcript"}
+            {showTranscript ? "Hide chat" : "Show chat"}
           </button>
         </div>
       </div>
 
-      <div
-        style={{ ...styles.orbStage, width: `${orbSize}px`, height: `${orbSize}px`, cursor: "pointer" }}
-        onClick={handleOrbTap}
-      >
+      <div style={styles.orbArea}>
         <div
-          style={{
-            ...styles.orbRing,
-            filter: speaking ? "none" : SENTIMENT_FILTER[sentiment] || "none",
-            boxShadow: GLOW_BY_STATE[orbState],
-            transform: speaking ? "scale(1.05)" : "scale(1)",
-            animation: orbAnimation,
-            transition: "box-shadow 0.8s ease-in-out, transform 0.8s ease-in-out"
-          }}
+          style={{ ...styles.orbStage, width: `${orbSize}px`, height: `${orbSize}px`, cursor: "pointer" }}
+          onClick={handleOrbTap}
         >
-          <video ref={videoRef} muted playsInline loop={false}
-            style={{ ...styles.orbVideo, filter: speaking ? "brightness(1.25) saturate(1.3)" : "brightness(1) saturate(1)", transition: "filter 0.4s ease" }}>
-            <source src="/orb.webm" type="video/webm" />
-            <source src="/orb.mp4" type="video/mp4" />
-          </video>
-          <video ref={video2Ref} muted playsInline loop={false}
-            style={{ ...styles.orbVideo, position: "absolute", top: 0, left: 0, opacity: 0 }}>
-            <source src="/orb.webm" type="video/webm" />
-            <source src="/orb.mp4" type="video/mp4" />
-          </video>
+          <div
+            style={{
+              ...styles.orbRing,
+              filter: speaking ? "none" : SENTIMENT_FILTER[sentiment] || "none",
+              boxShadow: GLOW_BY_STATE[orbState],
+              transform: speaking ? "scale(1.05)" : "scale(1)",
+              animation: orbAnimation,
+              transition: "box-shadow 0.8s ease-in-out, transform 0.8s ease-in-out"
+            }}
+          >
+            <video ref={videoRef} muted playsInline loop={false}
+              style={{ ...styles.orbVideo, filter: speaking ? "brightness(1.25) saturate(1.3)" : "brightness(1) saturate(1)", transition: "filter 0.4s ease" }}>
+              <source src="/orb.webm" type="video/webm" />
+              <source src="/orb.mp4" type="video/mp4" />
+            </video>
+            <video ref={video2Ref} muted playsInline loop={false}
+              style={{ ...styles.orbVideo, position: "absolute", top: 0, left: 0, opacity: 0 }}>
+              <source src="/orb.webm" type="video/webm" />
+              <source src="/orb.mp4" type="video/mp4" />
+            </video>
+          </div>
+          {orbState === "listening" && <div style={styles.listenRing} />}
+          {speaking && <div style={styles.pulseRing} />}
+          {dragActive && <div style={styles.dragRing} />}
+          {dragActive && <p style={styles.dragLabel}>Drop to show A.R.I.A</p>}
+          {absorbPreview && (
+            <img key={absorbPreview.key} src={absorbPreview.url} alt="Sending to A.R.I.A" style={styles.absorbImage} />
+          )}
         </div>
-        {orbState === "listening" && <div style={styles.listenRing} />}
-        {speaking && <div style={styles.pulseRing} />}
-        {dragActive && <div style={styles.dragRing} />}
-        {dragActive && <p style={styles.dragLabel}>Drop to show A.R.I.A</p>}
-        {absorbPreview && (
-          <img key={absorbPreview.key} src={absorbPreview.url} alt="Sending to A.R.I.A" style={styles.absorbImage} />
+
+        <p style={styles.stateLabel}>
+          {liveStatusLabel || (imageLoading ? "Looking at that…" : recording ? "Listening…" : loading ? "Musing…" : speaking ? "Speaking…" : "Tap the orb to speak")}
+        </p>
+
+        {canInterrupt && (
+          <button style={styles.stopButton} onClick={onStopAria}>
+            <Square size={11} fill="currentColor" /> Stop
+          </button>
         )}
       </div>
 
-      <p style={styles.stateLabel}>
-        {liveStatusLabel || (imageLoading ? "Looking at that…" : recording ? "Listening…" : loading ? "Musing…" : speaking ? "Speaking…" : "Tap the orb to speak")}
-      </p>
-
-      {canInterrupt && (
-        <button style={styles.stopButton} onClick={onStopAria}>
-          <Square size={12} fill="currentColor" /> Stop
-        </button>
+      {!liveMode && (
+        <div style={styles.inputBar}>
+          <button style={styles.pillIconButton} onClick={() => fileInputRef.current?.click()}>
+            <Camera size={16} color={theme.muted} />
+          </button>
+          <input
+            ref={fileInputRef}
+            type="file"
+            accept="image/*"
+            style={{ display: "none" }}
+            onChange={(e) => {
+              handleFiles(e.target.files);
+              e.target.value = "";
+            }}
+          />
+          <input
+            style={styles.pillInput}
+            value={message}
+            onChange={(e) => setMessage(e.target.value)}
+            onKeyDown={(e) => e.key === "Enter" && sendMessage()}
+            placeholder="Say anything…"
+          />
+          <button
+            style={{ ...styles.pillIconButton, backgroundColor: recording ? theme.crisis : "transparent" }}
+            onClick={recording ? stopRecording : () => startRecording(false)}
+          >
+            {recording ? <Square size={15} color="#fff" fill="#fff" /> : <Mic size={16} color={theme.muted} />}
+          </button>
+          <button style={styles.pillSendButton} onClick={() => sendMessage()}>
+            <Send size={15} color="#120e1c" />
+          </button>
+        </div>
       )}
 
       {showTranscript && (
-        <div style={{ ...styles.chatBox, height: isMobile ? "260px" : "300px" }}>
+        <div style={{ ...styles.transcriptPanel, ...(isMobile ? styles.transcriptPanelMobile : styles.transcriptPanelDesktop) }}>
           {conversation.length === 0 && !loading && (
-            <p style={styles.emptyState}>Get to know A.R.I.A, say whatever's on your mind, share memes...anything.</p>
+            <p style={styles.emptyState}>Nothing here yet — say whatever's on your mind, or drop a photo on the orb.</p>
           )}
           {conversation.map((msg, index) => (
             <div key={index} style={{
@@ -247,60 +279,19 @@ function TalkView({
           <div ref={chatEndRef} />
         </div>
       )}
-
-      <div style={styles.inputDock}>
-        <button
-          style={{ ...styles.micButton, backgroundColor: recording ? theme.crisis : theme.bgElevated, borderColor: recording ? theme.crisis : theme.border, ...buttonGlow("mic", recording ? theme.crisis : theme.purple) }}
-          onMouseEnter={() => setHoveredButton("mic")}
-          onMouseLeave={() => setHoveredButton(null)}
-          onClick={recording ? stopRecording : () => startRecording(false)}
-        >
-          {recording ? <Square size={16} fill="currentColor" /> : <Mic size={16} />}
-        </button>
-        <button
-          style={{ ...styles.cameraButton, ...buttonGlow("camera", theme.teal) }}
-          onMouseEnter={() => setHoveredButton("camera")}
-          onMouseLeave={() => setHoveredButton(null)}
-          onClick={() => fileInputRef.current?.click()}
-        >
-          <Camera size={16} />
-        </button>
-        <input
-          ref={fileInputRef}
-          type="file"
-          accept="image/*"
-          style={{ display: "none" }}
-          onChange={(e) => {
-            handleFiles(e.target.files);
-            e.target.value = "";
-          }}
-        />
-        <input
-          style={styles.input}
-          value={message}
-          onChange={(e) => setMessage(e.target.value)}
-          onKeyDown={(e) => e.key === "Enter" && sendMessage()}
-          placeholder="Say anything…"
-        />
-        <button
-          style={{ ...styles.sendButton, ...buttonGlow("send", theme.purple) }}
-          onMouseEnter={() => setHoveredButton("send")}
-          onMouseLeave={() => setHoveredButton(null)}
-          onClick={() => sendMessage()}
-        >
-          Send
-        </button>
-      </div>
     </div>
   );
 }
 
 const styles = {
-  wrap: { display: "flex", flexDirection: "column", alignItems: "center", width: "100%", maxWidth: "760px", margin: "0 auto", boxSizing: "border-box" },
-  header: { display: "flex", flexWrap: "wrap", gap: "10px", justifyContent: "space-between", alignItems: "center", width: "100%", marginBottom: "8px" },
-  sessionLabel: { fontFamily: theme.serif, fontSize: "20px", color: theme.cream },
-  elapsed: { fontSize: "12px", color: theme.mutedDim, fontFamily: "ui-monospace, Consolas, monospace" },
-  headerControls: { display: "flex", flexWrap: "wrap", alignItems: "center", gap: "10px" },
+  stage: {
+    display: "flex", flexDirection: "column", width: "100%", height: "calc(100vh - 100px)",
+    maxWidth: "900px", margin: "0 auto", boxSizing: "border-box", position: "relative"
+  },
+  topBar: { display: "flex", justifyContent: "space-between", alignItems: "center", padding: "4px 4px" },
+  topBarLeft: { minWidth: "40px" },
+  elapsed: { fontSize: "11px", color: theme.mutedDim, fontFamily: "ui-monospace, Consolas, monospace" },
+  topBarRight: { display: "flex", alignItems: "center", gap: "10px" },
   liveToggleWrap: { display: "flex", alignItems: "center", gap: "6px" },
   liveToggleLabel: { fontSize: "12px", color: theme.muted },
   toggle: {
@@ -312,12 +303,13 @@ const styles = {
     backgroundColor: "#ffffff", boxShadow: "0 1px 3px rgba(0,0,0,0.3)", transition: "transform 0.2s ease"
   },
   transcriptToggle: {
-    padding: "7px 14px", borderRadius: "999px", border: `1px solid ${theme.border}`,
-    backgroundColor: "transparent", color: theme.muted, fontSize: "12px", cursor: "pointer"
+    padding: "6px 13px", borderRadius: "999px", border: `1px solid ${theme.border}`,
+    backgroundColor: "rgba(255,255,255,0.03)", color: theme.muted, fontSize: "11px", cursor: "pointer"
   },
-  orbStage: {
-    position: "relative", display: "flex", alignItems: "center", justifyContent: "center", margin: "20px 0 10px"
+  orbArea: {
+    flex: 1, display: "flex", flexDirection: "column", alignItems: "center", justifyContent: "center", gap: "16px"
   },
+  orbStage: { position: "relative", display: "flex", alignItems: "center", justifyContent: "center" },
   orbRing: { width: "88%", height: "88%", borderRadius: "50%", overflow: "hidden", position: "relative" },
   orbVideo: { width: "100%", height: "100%", objectFit: "cover", borderRadius: "50%" },
   listenRing: {
@@ -342,28 +334,43 @@ const styles = {
     borderRadius: "14px", boxShadow: "0 8px 24px rgba(0,0,0,0.4)",
     animation: "imageAbsorb 0.65s ease-in forwards", zIndex: 5, pointerEvents: "none"
   },
-  stateLabel: { color: theme.mutedDim, fontSize: "12px", letterSpacing: "1px", textTransform: "uppercase", marginBottom: "10px" },
+  stateLabel: { color: theme.mutedDim, fontSize: "11px", letterSpacing: "1.5px", textTransform: "uppercase" },
   stopButton: {
-    display: "flex", alignItems: "center", gap: "6px", padding: "6px 16px", marginBottom: "16px",
+    display: "flex", alignItems: "center", gap: "6px", padding: "6px 16px",
     borderRadius: "999px", border: `1px solid ${theme.crisis}`,
     backgroundColor: "rgba(255,77,77,0.1)", color: "#ff8080", fontSize: "12px", cursor: "pointer"
   },
-  chatBox: {
-    display: "flex", flexDirection: "column", width: "100%", overflowY: "auto",
-    backgroundColor: theme.panel, backdropFilter: "blur(6px)", borderRadius: "16px", padding: "16px",
-    gap: "10px", border: `1px solid ${theme.border}`, marginBottom: "16px", boxSizing: "border-box"
+  inputBar: {
+    display: "flex", alignItems: "center", gap: "6px", padding: "8px 10px",
+    borderRadius: "999px", backgroundColor: "rgba(21,19,32,0.55)", backdropFilter: "blur(10px)",
+    border: `1px solid ${theme.border}`, margin: "0 auto", width: "100%", maxWidth: "560px", boxSizing: "border-box"
   },
-  emptyState: { color: theme.mutedDim, fontSize: "13px", textAlign: "center", margin: "auto" },
-  message: { maxWidth: "80%", padding: "10px 14px", borderRadius: "14px", wordBreak: "break-word" },
-  messageText: { color: theme.cream, margin: 0, lineHeight: "1.5", fontSize: "15px" },
-  messageImage: { maxWidth: "220px", borderRadius: "12px", display: "block", marginBottom: "6px" },
+  pillIconButton: {
+    width: "34px", height: "34px", borderRadius: "50%", border: "none", backgroundColor: "transparent",
+    display: "flex", alignItems: "center", justifyContent: "center", cursor: "pointer", flexShrink: 0
+  },
+  pillInput: {
+    flex: 1, minWidth: 0, background: "transparent", border: "none", outline: "none",
+    color: theme.cream, fontSize: "14px", padding: "0 4px"
+  },
+  pillSendButton: {
+    width: "34px", height: "34px", borderRadius: "50%", border: "none", flexShrink: 0,
+    background: `linear-gradient(135deg, ${theme.purple}, ${theme.teal})`,
+    display: "flex", alignItems: "center", justifyContent: "center", cursor: "pointer"
+  },
+  transcriptPanel: {
+    position: "fixed", zIndex: 60, display: "flex", flexDirection: "column", gap: "10px",
+    overflowY: "auto", backgroundColor: theme.panel, backdropFilter: "blur(10px)",
+    border: `1px solid ${theme.border}`, boxSizing: "border-box", animation: "panelSlideUp 0.25s ease"
+  },
+  transcriptPanelDesktop: { top: "90px", bottom: "110px", right: "20px", width: "320px", borderRadius: "16px", padding: "16px" },
+  transcriptPanelMobile: { left: "12px", right: "12px", bottom: "84px", maxHeight: "45vh", borderRadius: "16px", padding: "14px" },
+  emptyState: { color: theme.mutedDim, fontSize: "12px", textAlign: "center", margin: "auto" },
+  message: { maxWidth: "88%", padding: "9px 12px", borderRadius: "12px", wordBreak: "break-word" },
+  messageText: { color: theme.cream, margin: 0, lineHeight: "1.5", fontSize: "13px" },
+  messageImage: { maxWidth: "180px", borderRadius: "10px", display: "block", marginBottom: "6px" },
   typingDots: { display: "flex", gap: "4px", padding: "2px 0" },
-  typingDot: { width: "6px", height: "6px", borderRadius: "50%", backgroundColor: theme.purple, animation: "typingBounce 1s ease-in-out infinite" },
-  inputDock: { display: "flex", width: "100%", gap: "8px" },
-  micButton: { display: "flex", alignItems: "center", justifyContent: "center", padding: "10px 14px", color: theme.cream, border: `1px solid ${theme.border}`, borderRadius: "12px", cursor: "pointer", backgroundColor: theme.bgElevated, transition: "box-shadow 0.2s ease" },
-  cameraButton: { display: "flex", alignItems: "center", justifyContent: "center", padding: "10px 14px", color: theme.cream, border: `1px solid ${theme.border}`, borderRadius: "12px", cursor: "pointer", backgroundColor: theme.bgElevated, transition: "box-shadow 0.2s ease" },
-  input: { flex: 1, minWidth: 0, padding: "10px 14px", borderRadius: "12px", border: `1px solid ${theme.border}`, backgroundColor: theme.bgElevated, color: theme.cream, fontSize: "15px", outline: "none" },
-  sendButton: { padding: "10px 18px", background: `linear-gradient(135deg, ${theme.purple}, ${theme.teal})`, color: "#120e1c", fontWeight: 600, border: "none", borderRadius: "12px", cursor: "pointer", fontSize: "15px", transition: "box-shadow 0.2s ease" }
+  typingDot: { width: "6px", height: "6px", borderRadius: "50%", backgroundColor: theme.purple, animation: "typingBounce 1s ease-in-out infinite" }
 };
 
 export default TalkView;

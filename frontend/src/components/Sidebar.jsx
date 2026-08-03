@@ -1,10 +1,11 @@
-import { Home, Mic, BookOpen, BarChart3, Settings } from "lucide-react";
+import { Home, Mic, BookOpen, History, BarChart3, Settings } from "lucide-react";
 import { theme } from "../theme";
 
 const NAV_ITEMS = [
   { id: "home", label: "Home", Icon: Home },
   { id: "talk", label: "Talk", Icon: Mic },
   { id: "journal", label: "Journal", Icon: BookOpen },
+  { id: "history", label: "History", Icon: History },
   { id: "insights", label: "Insights", Icon: BarChart3 },
   { id: "settings", label: "Settings", Icon: Settings }
 ];

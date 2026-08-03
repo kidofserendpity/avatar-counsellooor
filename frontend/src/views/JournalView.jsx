@@ -1,6 +1,6 @@
 import { useEffect, useState, useCallback, useRef } from "react";
 import axios from "axios";
-import { Lightbulb, Heart, Flame, Target, Moon, Image, CloudRain, FileText, Archive, ArchiveRestore, Trash2, ChevronDown, Check } from "lucide-react";
+import { Lightbulb, Heart, Flame, Target, Moon, Image, CloudRain, FileText, Archive, ArchiveRestore, Trash2, ChevronDown, Check, Sparkles } from "lucide-react";
 import { theme } from "../theme";
 
 const CATEGORY_META = {
@@ -13,6 +13,25 @@ const CATEGORY_META = {
   worry: { label: "Worry", Icon: CloudRain, color: "#8b95a8" },
   other: { label: "Other", Icon: FileText, color: "#6b6578" }
 };
+
+const WRITING_PROMPTS = [
+  "What's something you didn't say out loud today?",
+  "What's been taking up the most space in your head lately?",
+  "Write about a moment today that you'd want to remember.",
+  "What's something you're avoiding thinking about right now?",
+  "If today had a title, what would it be?",
+  "What's a conversation you wish you could have again?",
+  "What's something you're proud of that nobody noticed?",
+  "Write to someone you haven't said something to yet.",
+  "What's weighing on you that you haven't put into words?",
+  "Describe how you actually feel right now, not how you're supposed to feel.",
+  "What's something small that went right today?",
+  "What do you wish someone had asked you today?",
+  "Write about something you're looking forward to, even a little.",
+  "What's a thought you keep circling back to?",
+  "If you could say one true thing right now, what would it be?",
+  "What's something you needed to hear today?"
+];
 
 function CategoryDropdown({ value, onChange, includeAll }) {
   const [open, setOpen] = useState(false);
@@ -70,6 +89,7 @@ function JournalView({ apiBase }) {
   const [loaded, setLoaded] = useState(false);
   const [categoryFilter, setCategoryFilter] = useState("all");
   const [showArchived, setShowArchived] = useState(false);
+  const [activePrompt, setActivePrompt] = useState(null);
 
   const loadEntries = useCallback(() => {
     axios.get(`${apiBase}/api/journal`)
@@ -80,6 +100,11 @@ function JournalView({ apiBase }) {
 
   useEffect(() => { loadEntries(); }, [loadEntries]);
 
+  const showRandomPrompt = () => {
+    const random = WRITING_PROMPTS[Math.floor(Math.random() * WRITING_PROMPTS.length)];
+    setActivePrompt(random);
+  };
+
   const saveEntry = async () => {
     if (!draft.trim()) return;
     setSaving(true);
@@ -88,6 +113,7 @@ function JournalView({ apiBase }) {
       setDraft("");
       setSubject("");
       setComposeCategory("other");
+      setActivePrompt(null);
       loadEntries();
     } catch (err) {
       console.error("Journal save failed:", err);
@@ -127,8 +153,16 @@ function JournalView({ apiBase }) {
         <div style={styles.composerColumn}>
           <h1 style={styles.title}>Journal</h1>
           <p style={styles.sub}>
-            Private writing space. A.R.I.A can talk with you about anything here if you bring it up, she won't raise it on her own.
+            Private writing space. A.R.I.A can talk with you about anything here if you bring it up — she won't raise it on her own.
           </p>
+
+          {activePrompt && (
+            <div style={styles.promptBox}>
+              <Sparkles size={14} color={theme.purpleBright} />
+              <span style={styles.promptText}>{activePrompt}</span>
+            </div>
+          )}
+
           <div style={styles.composer}>
             <input
               style={styles.subjectInput}
@@ -144,7 +178,12 @@ function JournalView({ apiBase }) {
               rows={8}
             />
             <div style={styles.composerFooter}>
-              <CategoryDropdown value={composeCategory} onChange={setComposeCategory} includeAll={false} />
+              <div style={{ display: "flex", gap: "8px", alignItems: "center" }}>
+                <CategoryDropdown value={composeCategory} onChange={setComposeCategory} includeAll={false} />
+                <button style={styles.promptButton} onClick={showRandomPrompt}>
+                  <Sparkles size={13} /> Need a prompt?
+                </button>
+              </div>
               <button style={styles.saveButton} onClick={saveEntry} disabled={saving || !draft.trim()}>
                 {saving ? "Saving…" : "Save entry"}
               </button>
@@ -165,7 +204,7 @@ function JournalView({ apiBase }) {
 
           {loaded && visible.length === 0 && (
             <p style={styles.emptyState}>
-              {showArchived ? "No archived entries." : "No journals here yet."}
+              {showArchived ? "No archived entries." : "Nothing here yet — your first one starts on the left."}
             </p>
           )}
 
@@ -210,7 +249,12 @@ const styles = {
   composerColumn: { flex: "1 1 340px", minWidth: "300px", position: "sticky", top: "0" },
   entriesColumn: { flex: "2 1 480px", minWidth: "300px" },
   title: { fontFamily: theme.serif, fontSize: "30px", color: theme.cream, margin: 0 },
-  sub: { color: theme.muted, fontSize: "14px", marginTop: "6px", marginBottom: "20px", lineHeight: 1.5 },
+  sub: { color: theme.muted, fontSize: "14px", marginTop: "6px", marginBottom: "16px", lineHeight: 1.5 },
+  promptBox: {
+    display: "flex", alignItems: "center", gap: "8px", padding: "10px 14px", marginBottom: "12px",
+    borderRadius: "12px", backgroundColor: "rgba(155,107,255,0.1)", border: `1px solid ${theme.border}`
+  },
+  promptText: { color: theme.cream, fontSize: "13px", fontStyle: "italic" },
   composer: {
     backgroundColor: theme.panel, border: `1px solid ${theme.border}`, borderRadius: "16px",
     padding: "16px", display: "flex", flexDirection: "column", gap: "10px"
@@ -224,6 +268,10 @@ const styles = {
     color: theme.cream, fontSize: "15px", lineHeight: 1.6, fontFamily: theme.sans, minHeight: "160px"
   },
   composerFooter: { display: "flex", justifyContent: "space-between", alignItems: "center", gap: "10px", flexWrap: "wrap" },
+  promptButton: {
+    display: "flex", alignItems: "center", gap: "6px", padding: "9px 12px", borderRadius: "10px",
+    border: `1px solid ${theme.border}`, backgroundColor: "transparent", color: theme.muted, fontSize: "12px", cursor: "pointer"
+  },
   saveButton: {
     padding: "10px 20px",
     background: `linear-gradient(135deg, ${theme.rose}, ${theme.roseDeep})`,

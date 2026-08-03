@@ -1,6 +1,6 @@
 import { useState } from "react";
 import axios from "axios";
-import { Palette, Sparkles, SunMoon, Wind, UserCircle, ShieldAlert } from "lucide-react";
+import { Palette, Sparkles, SunMoon, Wind, UserCircle, ShieldAlert, MessageSquarePlus, Star } from "lucide-react";
 import { theme } from "../theme";
 import { isLoggedIn, clearAccountId, clearGuestChoice, clearUsername } from "../utils/userId";
 import { useIsMobile } from "../hooks/useIsMobile";
@@ -20,12 +20,61 @@ function AccountSection() {
       <div style={styles.cardHeader}><UserCircle size={17} color={theme.purpleBright} /><span>Account</span></div>
       <div style={styles.rowSub}>
         {loggedIn
-          ? "You're signed in, your memory and journal are private to this account, on any device."
+          ? "You're signed in — your memory and journal are private to this account, on any device."
           : "You're using a guest space tied to this browser. Log in or create an account to reach your space from other devices too."}
       </div>
       <button style={{ ...styles.dangerButton, marginTop: "16px" }} onClick={handleAccountAction}>
         {loggedIn ? "Log out" : "Log in / Sign up"}
       </button>
+    </div>
+  );
+}
+
+function FeedbackSection({ apiBase }) {
+  const [message, setMessage] = useState("");
+  const [rating, setRating] = useState(0);
+  const [sending, setSending] = useState(false);
+  const [sent, setSent] = useState(false);
+
+  const submit = async () => {
+    if (!message.trim()) return;
+    setSending(true);
+    try {
+      await axios.post(`${apiBase}/api/feedback`, { message: message.trim(), rating: rating || null });
+      setMessage("");
+      setRating(0);
+      setSent(true);
+    } catch (err) {
+      console.error("Feedback send failed:", err);
+    } finally {
+      setSending(false);
+    }
+  };
+
+  return (
+    <div style={styles.card}>
+      <div style={styles.cardHeader}><MessageSquarePlus size={17} color={theme.teal} /><span>Feedback</span></div>
+      <div style={styles.rowSub}>Anything that felt off, confusing, or genuinely worked well — this goes straight to the person building A.R.I.A.</div>
+
+      <div style={{ display: "flex", gap: "4px", margin: "12px 0" }}>
+        {[1, 2, 3, 4, 5].map((n) => (
+          <button key={n} style={styles.starButton} onClick={() => setRating(n)}>
+            <Star size={20} fill={n <= rating ? theme.purpleBright : "none"} color={n <= rating ? theme.purpleBright : theme.mutedDim} />
+          </button>
+        ))}
+      </div>
+
+      <textarea
+        style={styles.feedbackTextarea}
+        value={message}
+        onChange={(e) => { setMessage(e.target.value); setSent(false); }}
+        placeholder="What's on your mind about the app?"
+        rows={4}
+      />
+      <button style={{ ...styles.dangerButton, borderColor: theme.purple, color: theme.purpleBright, backgroundColor: "rgba(155,107,255,0.08)" }} onClick={submit} disabled={sending || !message.trim()}>
+        {sending ? "Sending…" : "Send feedback"}
+      </button>
+      {sent && <p style={styles.confirmText}>Thank you — that's been sent.</p>}
     </div>
   );
 }
@@ -181,6 +230,16 @@ function SettingsView({ apiBase, themeMode, onSetThemeMode, ambientBackground, o
         </div>
 
         <div
+          style={{ animation: "fadeUp 0.4s ease 0.12s backwards" }}
+          onMouseEnter={() => setHoveredCard("feedback")}
+          onMouseLeave={() => setHoveredCard(null)}
+        >
+          <div style={cardStyle("feedback")}>
+            <FeedbackSection apiBase={apiBase} />
+          </div>
+        </div>
+
+        <div
           style={{ ...cardStyle("data"), gridColumn: isMobile ? "auto" : "1 / -1", animation: "fadeUp 0.4s ease 0.15s backwards" }}
           onMouseEnter={() => setHoveredCard("data")}
           onMouseLeave={() => setHoveredCard(null)}
@@ -191,7 +250,7 @@ function SettingsView({ apiBase, themeMode, onSetThemeMode, ambientBackground, o
           <div style={styles.dangerRow}>
             <div>
               <div style={styles.dangerLabel}>Clear A.R.I.A's memory only</div>
-              <div style={styles.rowSub}>Facts, mood history, and style, journal entries are kept.</div>
+              <div style={styles.rowSub}>Facts, mood history, and style — journal entries are kept.</div>
             </div>
             <button style={styles.dangerButton} onClick={clearMemoryOnly} disabled={busy !== null}>
               {busy === "memory" ? "Clearing…" : "Clear"}
@@ -201,7 +260,7 @@ function SettingsView({ apiBase, themeMode, onSetThemeMode, ambientBackground, o
           <div style={styles.dangerRow}>
             <div>
               <div style={styles.dangerLabel}>Clear journal only</div>
-              <div style={styles.rowSub}>Deletes every journal entry, A.R.I.A's memory of you is kept.</div>
+              <div style={styles.rowSub}>Deletes every journal entry — A.R.I.A's memory of you is kept.</div>
             </div>
             <button style={styles.dangerButton} onClick={clearJournalOnly} disabled={busy !== null}>
               {busy === "journal" ? "Clearing…" : "Clear"}
@@ -211,7 +270,7 @@ function SettingsView({ apiBase, themeMode, onSetThemeMode, ambientBackground, o
           <div style={{ ...styles.dangerRow, borderBottom: "none" }}>
             <div>
               <div style={styles.dangerLabel}>Clear both</div>
-              <div style={styles.rowSub}>Wipes memory and journal entirely, a completely fresh start.</div>
+              <div style={styles.rowSub}>Wipes memory and journal entirely — a completely fresh start.</div>
             </div>
             <button style={styles.dangerButton} onClick={clearEverything} disabled={busy !== null}>
               {busy === "both" ? "Clearing…" : "Clear both"}
@@ -253,6 +312,12 @@ const styles = {
   toggleDot: {
     display: "block", width: "17px", height: "17px", borderRadius: "50%",
     backgroundColor: "#ffffff", boxShadow: "0 1px 3px rgba(0,0,0,0.3)", transition: "transform 0.2s ease"
+  },
+  starButton: { background: "transparent", border: "none", cursor: "pointer", padding: "2px", display: "flex" },
+  feedbackTextarea: {
+    width: "100%", boxSizing: "border-box", backgroundColor: theme.bg, border: `1px solid ${theme.border}`,
+    borderRadius: "10px", padding: "10px 12px", color: theme.cream, fontSize: "13px", fontFamily: "inherit",
+    resize: "vertical", marginBottom: "10px"
   },
   dangerRow: {
     display: "flex", justifyContent: "space-between", alignItems: "center",
