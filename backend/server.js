@@ -7,12 +7,24 @@ const { execFile } = require('child_process');
 const path = require('path');
 require('dotenv').config();
 
-const { getTherapeuticResponse, getCrisisResponse, extractMemoryAndStyle, getLiveCheckInLine } = require('./dialogue');
+const {
+  getTherapeuticResponse,
+  getCrisisResponse,
+  extractMemoryAndStyle,
+  getLiveCheckInLine,
+  CBT_SYSTEM_PROMPT,
+  SENTIMENT_PROMPT,
+  CRISIS_CONTEXT_PROMPT,
+  CRISIS_RESPONSE_PROMPT_EXPLICIT,
+  CRISIS_RESPONSE_PROMPT_AMBIGUOUS,
+  MEMORY_AND_STYLE_PROMPT,
+  LIVE_CHECKIN_PROMPT
+} = require('./dialogue');
 const { detectExplicitCrisis } = require('./crisis');
 const { transcribeAudio } = require('./transcribe');
 const { getImageReaction, extractVisualFact } = require('./vision');
 const { createAccount, verifyLogin, getUsernameByAccountId } = require('./accounts');
-const { stripEmoji } = require('./textUtils');
+const { prepareSpeechText } = require('./textUtils');
 const {
   loadMemory,
   saveMemory,
@@ -53,7 +65,7 @@ const apiLimiter = rateLimit({
   max: 100,
   standardHeaders: true,
   legacyHeaders: false,
-  message: { error: 'Too many requests — please slow down and try again in a few minutes.' }
+  message: { error: 'Too many requests, please slow down and try again in a few minutes.' }
 });
 
 const authLimiter = rateLimit({
@@ -61,7 +73,7 @@ const authLimiter = rateLimit({
   max: 20,
   standardHeaders: true,
   legacyHeaders: false,
-  message: { error: 'Too many attempts — please wait a few minutes and try again.' }
+  message: { error: 'Too many attempts, please wait a few minutes and try again.' }
 });
 
 app.use('/api/chat', apiLimiter);
@@ -72,6 +84,21 @@ app.use('/api/account', authLimiter);
 
 app.get('/', (req, res) => {
   res.json({ message: 'Avatar Counsellor Backend is running!' });
+});
+
+app.get('/api/admin/prompts', (req, res) => {
+  if (!process.env.ADMIN_KEY || req.query.key !== process.env.ADMIN_KEY) {
+    return res.status(401).json({ error: 'Not authorized' });
+  }
+  res.json({
+    CBT_SYSTEM_PROMPT,
+    SENTIMENT_PROMPT,
+    CRISIS_CONTEXT_PROMPT,
+    CRISIS_RESPONSE_PROMPT_EXPLICIT,
+    CRISIS_RESPONSE_PROMPT_AMBIGUOUS,
+    MEMORY_AND_STYLE_PROMPT,
+    LIVE_CHECKIN_PROMPT
+  });
 });
 
 app.post('/api/account/signup', async (req, res) => {
@@ -253,7 +280,7 @@ app.post('/api/live-checkin', async (req, res) => {
     const reply = await getLiveCheckInLine(conversationHistory || []);
     const audioFileName = `speech_${Date.now()}.mp3`;
     const audioFilePath = path.join(__dirname, 'public', 'audio', audioFileName);
-    execFile('python', ['generate_speech.py', stripEmoji(reply), audioFilePath], (error) => {
+    execFile('python', ['generate_speech.py', prepareSpeechText(reply), audioFilePath], (error) => {
       if (error) {
         console.error('TTS generation error:', error);
         return res.json({ response: reply, audioUrl: null });
@@ -269,9 +296,9 @@ app.post('/api/live-checkin', async (req, res) => {
 function generateCrisisAudioAndRespond(res, replyText, sentiment) {
   const crisisAudioFileName = `speech_${Date.now()}.mp3`;
   const crisisAudioPath = path.join(__dirname, 'public', 'audio', crisisAudioFileName);
-  execFile('python', ['generate_speech.py', stripEmoji(replyText), crisisAudioPath], (err) => {
+  execFile('python', ['generate_speech.py', prepareSpeechText(replyText), crisisAudioPath], (err) => {
     if (err || !fs.existsSync(crisisAudioPath) || fs.statSync(crisisAudioPath).size === 0) {
-      console.error('CRISIS AUDIO FAILED — err:', err, '| file exists:', fs.existsSync(crisisAudioPath));
+      console.error('CRISIS AUDIO FAILED, err:', err, '| file exists:', fs.existsSync(crisisAudioPath));
       return res.json({ response: replyText, isCrisis: true, sentiment, audioUrl: null });
     }
     res.json({ response: replyText, isCrisis: true, sentiment, audioUrl: `/audio/${crisisAudioFileName}` });
@@ -319,7 +346,7 @@ app.post('/api/chat', async (req, res) => {
 
     let memoryBlock = buildMemoryBlock(memory, checkInNote, username);
     if (interrupted) {
-      memoryBlock += "\n\nOne more thing for right now: the person just cut you off mid-reply to say this instead. Acknowledge that naturally and briefly as part of responding to what they're saying now — don't over-apologize or make a big deal of it, just fold it in like a person would ('oh — go ahead', 'sure, what's up') and then continue normally.";
+      memoryBlock += "\n\nOne more thing for right now: the person just cut you off mid-reply to say this instead. Acknowledge that naturally and briefly as part of responding to what they're saying now, don't over-apologize or make a big deal of it, just fold it in like a person would ('oh, go ahead', 'sure, what's up') and then continue normally.";
     }
 
     const explicitCheck = detectExplicitCrisis(message);
@@ -348,7 +375,7 @@ app.post('/api/chat', async (req, res) => {
     const audioFileName = `speech_${Date.now()}.mp3`;
     const audioFilePath = path.join(__dirname, 'public', 'audio', audioFileName);
 
-    execFile('python', ['generate_speech.py', stripEmoji(response), audioFilePath], (error) => {
+    execFile('python', ['generate_speech.py', prepareSpeechText(response), audioFilePath], (error) => {
       if (error) {
         console.error('TTS generation error:', error);
         return res.json({ response, isCrisis: false, audioUrl: null, sentiment });
@@ -372,7 +399,7 @@ app.post('/api/chat-image', upload.single('image'), async (req, res) => {
     const MAX_IMAGE_BYTES = 8 * 1024 * 1024;
     if (req.file.size > MAX_IMAGE_BYTES) {
       fs.unlinkSync(req.file.path);
-      return res.status(400).json({ error: 'Image is too large — try something under 8MB.' });
+      return res.status(400).json({ error: 'Image is too large, try something under 8MB.' });
     }
 
     const caption = req.body.caption || '';
@@ -419,7 +446,7 @@ app.post('/api/chat-image', upload.single('image'), async (req, res) => {
     const audioFileName = `speech_${Date.now()}.mp3`;
     const audioFilePath = path.join(__dirname, 'public', 'audio', audioFileName);
 
-    execFile('python', ['generate_speech.py', stripEmoji(reply), audioFilePath], (error) => {
+    execFile('python', ['generate_speech.py', prepareSpeechText(reply), audioFilePath], (error) => {
       if (error) {
         console.error('TTS generation error:', error);
         return res.json({ response: reply, sentiment, audioUrl: null });

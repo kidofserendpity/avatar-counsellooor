@@ -1,7 +1,3 @@
-// Strips markdown formatting characters so text never gets displayed or
-// spoken with literal asterisks/hashes/backticks — this is applied at the
-// source, right where Aria's replies are generated, so it's impossible to
-// forget at any individual call site later.
 function cleanMarkdown(text) {
   if (!text) return text;
   let cleaned = text;
@@ -16,7 +12,6 @@ function cleanMarkdown(text) {
   cleaned = cleaned.replace(/^#{1,6}\s+/gm, '');
   cleaned = cleaned.replace(/^[ \t]*[-*•]\s+/gm, '');
   cleaned = cleaned.replace(/^[ \t]*\d+\.\s+/gm, '');
-  // Catch-all for any stray markers the patterns above didn't pair up
   cleaned = cleaned.replace(/[*_`~#]/g, '');
   cleaned = cleaned.replace(/[ \t]{2,}/g, ' ');
   cleaned = cleaned.replace(/\n{3,}/g, '\n\n');
@@ -24,9 +19,6 @@ function cleanMarkdown(text) {
   return cleaned.trim();
 }
 
-// Removes emoji specifically for the TTS path — text shown on screen keeps
-// emoji, only the audio version gets stripped, since a voice engine has no
-// good way to "say" 😊 out loud.
 function stripEmoji(text) {
   if (!text) return text;
   return text
@@ -35,4 +27,17 @@ function stripEmoji(text) {
     .trim();
 }
 
-module.exports = { cleanMarkdown, stripEmoji };
+// TTS spells "A.R.I.A" out letter by letter because of the periods used
+// for on-screen branding. This swaps that specific pattern back to the
+// plain word before speech generation only, so it's actually pronounced
+// as a name. Display text elsewhere is untouched.
+function toSpokenForm(text) {
+  if (!text) return text;
+  return text.replace(/\bA\.\s*R\.\s*I\.\s*A\.?\b/gi, 'Aria');
+}
+
+function prepareSpeechText(text) {
+  return toSpokenForm(stripEmoji(text));
+}
+
+module.exports = { cleanMarkdown, stripEmoji, toSpokenForm, prepareSpeechText };
