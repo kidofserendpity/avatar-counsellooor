@@ -41,4 +41,11 @@ function searchHistory(userId, query) {
   return messages.filter((m) => m.content && m.content.toLowerCase().includes(lowerQuery)).reverse();
 }
 
-module.exports = { loadHistory, saveHistory, appendMessages, searchHistory };
+// Chronological (oldest to newest), used to rebuild the live Talk screen
+// on load, unlike searchHistory above which returns newest-first for browsing.
+function getRecentForContext(userId, limit = 40) {
+  const messages = loadHistory(userId);
+  return messages.slice(-limit);
+}
+
+module.exports = { loadHistory, saveHistory, appendMessages, searchHistory, getRecentForContext };

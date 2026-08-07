@@ -29,7 +29,6 @@ const {
   loadMemory,
   saveMemory,
   addFact,
-  addJournalFact,
   addVisualFact,
   addMoodEntry,
   updateStyle,
@@ -38,9 +37,9 @@ const {
   buildMemoryBlock,
   clearMemory
 } = require('./memory');
-const { loadJournal, saveJournal, clearJournal, addEntry, deleteEntry, setArchived, extractJournalFact } = require('./journal');
+const { loadJournal, saveJournal, clearJournal, addEntry, deleteEntry, setArchived, summarizeForMemory } = require('./journal');
 const { loadFeedback, saveFeedback, addFeedback } = require('./feedback');
-const { appendMessages, searchHistory } = require('./history');
+const { appendMessages, searchHistory, getRecentForContext } = require('./history');
 
 const app = express();
 const PORT = process.env.PORT || 5000;
@@ -148,6 +147,12 @@ app.get('/api/mood-history', (req, res) => {
   res.json({ moodLog: memory.moodLog });
 });
 
+app.get('/api/conversation', (req, res) => {
+  const userId = getUserId(req);
+  const messages = getRecentForContext(userId, 40);
+  res.json({ messages });
+});
+
 app.get('/api/journal', (req, res) => {
   const userId = getUserId(req);
   const entries = loadJournal(userId);
@@ -165,14 +170,6 @@ app.post('/api/journal', async (req, res) => {
     const entries = loadJournal(userId);
     const { entries: updatedEntries, entry } = addEntry(entries, text.trim(), category, subject);
     saveJournal(userId, updatedEntries);
-
-    extractJournalFact(text.trim())
-      .then((fact) => {
-        if (!fact) return;
-        const memory = loadMemory(userId);
-        saveMemory(userId, addJournalFact(memory, fact));
-      })
-      .catch((err) => console.error('Journal fact update failed:', err.message));
 
     res.json({ entry });
   } catch (error) {
@@ -344,7 +341,10 @@ app.post('/api/chat', async (req, res) => {
     const checkInNote = checkin.checkInNote;
     if (checkInNote) saveMemory(userId, memory);
 
-    let memoryBlock = buildMemoryBlock(memory, checkInNote, username);
+    const journalEntries = loadJournal(userId);
+    const journalSummaryLine = summarizeForMemory(journalEntries);
+
+    let memoryBlock = buildMemoryBlock(memory, checkInNote, username, journalSummaryLine);
     if (interrupted) {
       memoryBlock += "\n\nOne more thing for right now: the person just cut you off mid-reply to say this instead. Acknowledge that naturally and briefly as part of responding to what they're saying now, don't over-apologize or make a big deal of it, just fold it in like a person would ('oh, go ahead', 'sure, what's up') and then continue normally.";
     }
@@ -419,7 +419,10 @@ app.post('/api/chat-image', upload.single('image'), async (req, res) => {
     const checkin = consumeCrisisCheckIn(memory);
     memory = checkin.memory;
     if (checkin.checkInNote) saveMemory(userId, memory);
-    const memoryBlock = buildMemoryBlock(memory, checkin.checkInNote, username);
+
+    const journalEntries = loadJournal(userId);
+    const journalSummaryLine = summarizeForMemory(journalEntries);
+    const memoryBlock = buildMemoryBlock(memory, checkin.checkInNote, username, journalSummaryLine);
 
     if (caption && detectExplicitCrisis(caption).isCrisis) {
       const crisisReply = await getCrisisResponse(caption, 'explicit', conversationHistory, memoryBlock);

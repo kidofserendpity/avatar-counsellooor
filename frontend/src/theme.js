@@ -16,10 +16,11 @@ export const theme = {
   serif: "'Fraunces', Georgia, 'Iowan Old Style', serif",
   sans: "'Inter', system-ui, 'Segoe UI', Roboto, sans-serif",
   gradientText: {
-    backgroundImage: "linear-gradient(135deg, var(--accent-purple-bright), var(--accent-teal))",
+    backgroundImage: "linear-gradient(135deg, var(--accent-teal), var(--accent-purple-bright), var(--accent-rose))",
     WebkitBackgroundClip: "text",
     backgroundClip: "text",
     color: "transparent",
     WebkitTextFillColor: "transparent"
-  }
+  },
+  gradientTriple: "linear-gradient(135deg, var(--accent-teal), var(--accent-purple), var(--accent-rose))"
 };

@@ -1,8 +1,5 @@
 const fs = require('fs');
 const path = require('path');
-const Groq = require('groq-sdk');
-
-const groq = new Groq({ apiKey: process.env.GROQ_API_KEY });
 
 const JOURNAL_DIR = path.join(__dirname, 'data', 'journal');
 
@@ -59,30 +56,22 @@ function setArchived(entries, id, archived) {
   return entries.map((e) => (e.id === id ? { ...e, archived } : e));
 }
 
-const JOURNAL_FACT_PROMPT = `You're reviewing something a person just wrote in their private journal. Decide if it reveals a specific, durable fact worth Aria quietly knowing for future conversations — a situation, relationship, plan, recurring feeling, or strong opinion. Not a passing mood.
-
-If yes, state it plainly, third person, under 15 words. If not, or if it's too personal/raw to summarize respectfully in one line, write NONE — it's fine for Aria to simply know a journal entry exists without extracting details from it.
-
-Respond with only the fact sentence or NONE, nothing else.`;
-
-const extractJournalFact = async (text) => {
-  try {
-    const completion = await groq.chat.completions.create({
-      model: 'openai/gpt-oss-120b',
-      messages: [
-        { role: 'system', content: JOURNAL_FACT_PROMPT },
-        { role: 'user', content: text }
-      ],
-      max_tokens: 40,
-      temperature: 0.3,
-    });
-    const fact = completion.choices[0].message.content.trim();
-    return (fact === 'NONE' || fact.length < 3) ? null : fact;
-  } catch (err) {
-    console.error('Journal fact extraction failed:', err.message);
-    return null;
-  }
-};
+// Built fresh from the real entries every time, not from a lucky-or-not
+// background extraction step. This is what actually lets Aria know a
+// journal exists and roughly what's in it, without needing to hope an
+// earlier step succeeded.
+function summarizeForMemory(entries) {
+  const active = entries.filter((e) => !e.archived);
+  if (active.length === 0) return '';
+  const recent = active.slice(-5).reverse();
+  const lines = recent.map((e) => {
+    const dateStr = new Date(e.timestamp).toLocaleDateString();
+    const snippet = e.text.length > 100 ? `${e.text.slice(0, 100)}...` : e.text;
+    const label = e.subject ? `"${e.subject}"` : `a ${e.category} entry`;
+    return `${dateStr}, ${label}: ${snippet}`;
+  });
+  return `They keep a private journal here. It currently has ${active.length} ${active.length === 1 ? 'entry' : 'entries'}, most recent first: ${lines.join(' | ')}.`;
+}
 
 module.exports = {
   loadJournal,
@@ -91,6 +80,6 @@ module.exports = {
   addEntry,
   deleteEntry,
   setArchived,
-  extractJournalFact,
+  summarizeForMemory,
   VALID_CATEGORIES
 };

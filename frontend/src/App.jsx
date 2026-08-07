@@ -181,6 +181,20 @@ function App() {
   useEffect(() => { imageLoadingRef.current = imageLoading; }, [imageLoading]);
 
   useEffect(() => {
+    if (!identityResolved || !onboardingDone) return;
+    axios.get(`${API_BASE}/api/conversation`)
+      .then((res) => {
+        const messages = res.data.messages || [];
+        if (messages.length > 0) {
+          setConversation(messages.map((m) => ({ role: m.role, content: m.content })));
+        }
+      })
+      .catch((err) => console.error('Failed to restore conversation history:', err));
+  }, [identityResolved, onboardingDone]);
+  
+  
+  
+  useEffect(() => {
     document.body.classList.toggle("light-theme", themeMode === "light");
     try {
       localStorage.setItem(THEME_STORAGE_KEY, themeMode);
@@ -188,6 +202,9 @@ function App() {
       // localStorage unavailable — theme just won't persist across reloads
     }
   }, [themeMode]);
+
+
+  
 
   useEffect(() => {
     if (!window.location.hash) {
