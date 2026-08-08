@@ -1,4 +1,5 @@
 import { useState, useRef, useEffect } from "react";
+import { animate } from "animejs";
 import axios from "axios";
 import Sidebar from "./components/Sidebar";
 import BottomNav from "./components/BottomNav";
@@ -172,6 +173,9 @@ function App() {
   const hasShownLivePromptRef = useRef(false);
   const watchdogTimerRef = useRef(null);
   const checkinStageRef = useRef(0);
+  const auroraARef = useRef(null);
+  const auroraBRef = useRef(null);
+  const auroraCRef = useRef(null);
 
   useEffect(() => { conversationRef.current = conversation; }, [conversation]);
   useEffect(() => { liveModeRef.current = liveMode; }, [liveMode]);
@@ -181,20 +185,6 @@ function App() {
   useEffect(() => { imageLoadingRef.current = imageLoading; }, [imageLoading]);
 
   useEffect(() => {
-    if (!identityResolved || !onboardingDone) return;
-    axios.get(`${API_BASE}/api/conversation`)
-      .then((res) => {
-        const messages = res.data.messages || [];
-        if (messages.length > 0) {
-          setConversation(messages.map((m) => ({ role: m.role, content: m.content })));
-        }
-      })
-      .catch((err) => console.error('Failed to restore conversation history:', err));
-  }, [identityResolved, onboardingDone]);
-  
-  
-  
-  useEffect(() => {
     document.body.classList.toggle("light-theme", themeMode === "light");
     try {
       localStorage.setItem(THEME_STORAGE_KEY, themeMode);
@@ -203,8 +193,31 @@ function App() {
     }
   }, [themeMode]);
 
+  useEffect(() => {
+    if (!ambientBackground) return;
 
-  
+    const boost = liveMode;
+    const blobs = [
+      { el: auroraARef.current, duration: boost ? 12000 : 22000, peakOpacity: boost ? 0.4 : 0.22, dx: [0, 46, -24, 0], dy: [0, -34, 18, 0] },
+      { el: auroraBRef.current, duration: boost ? 14000 : 26000, peakOpacity: boost ? 0.32 : 0.18, dx: [0, -38, 30, 0], dy: [0, 26, -22, 0] },
+      { el: auroraCRef.current, duration: boost ? 16000 : 30000, peakOpacity: boost ? 0.24 : 0.14, dx: [0, 28, -34, 0], dy: [0, -20, 30, 0] }
+    ];
+
+    const animations = blobs
+      .filter((blob) => blob.el)
+      .map((blob) =>
+        animate(blob.el, {
+          translateX: blob.dx,
+          translateY: blob.dy,
+          opacity: [blob.peakOpacity * 0.55, blob.peakOpacity, blob.peakOpacity * 0.55],
+          duration: blob.duration,
+          loop: true,
+          ease: "inOutSine"
+        })
+      );
+
+    return () => animations.forEach((a) => a.pause());
+  }, [ambientBackground, liveMode]);
 
   useEffect(() => {
     if (!window.location.hash) {
@@ -509,15 +522,13 @@ function App() {
     }
   };
 
-  const auroraBoost = liveMode;
-
   return (
     <div style={styles.shell}>
       {ambientBackground && (
         <>
-          <div style={{ ...styles.auroraA, opacity: auroraBoost ? 0.4 : 0.22, animationDuration: auroraBoost ? "12s" : "22s" }} />
-          <div style={{ ...styles.auroraB, opacity: auroraBoost ? 0.32 : 0.18, animationDuration: auroraBoost ? "14s" : "26s" }} />
-          <div style={{ ...styles.auroraC, opacity: auroraBoost ? 0.24 : 0.14, animationDuration: auroraBoost ? "16s" : "30s" }} />
+          <div ref={auroraARef} style={styles.auroraA} />
+          <div ref={auroraBRef} style={styles.auroraB} />
+          <div ref={auroraCRef} style={styles.auroraC} />
         </>
       )}
       {!isMobile && <Sidebar activeView={activeView} onNavigate={navigateTo} />}
@@ -536,20 +547,20 @@ const styles = {
   auroraA: {
     position: "fixed", top: "-20%", left: "-10%", width: "60vw", height: "60vw", borderRadius: "50%",
     background: `radial-gradient(circle, var(--accent-purple), transparent 70%)`,
-    filter: "blur(60px)", animationName: "auroraDriftA", animationTimingFunction: "ease-in-out", animationIterationCount: "infinite",
-    pointerEvents: "none", zIndex: 0, transition: "opacity 0.6s ease"
+    filter: "blur(60px)", opacity: 0.22,
+    pointerEvents: "none", zIndex: 0
   },
   auroraB: {
     position: "fixed", bottom: "-20%", right: "-10%", width: "55vw", height: "55vw", borderRadius: "50%",
     background: `radial-gradient(circle, var(--accent-teal), transparent 70%)`,
-    filter: "blur(70px)", animationName: "auroraDriftB", animationTimingFunction: "ease-in-out", animationIterationCount: "infinite",
-    pointerEvents: "none", zIndex: 0, transition: "opacity 0.6s ease"
+    filter: "blur(70px)", opacity: 0.18,
+    pointerEvents: "none", zIndex: 0
   },
   auroraC: {
     position: "fixed", top: "30%", left: "35%", width: "42vw", height: "42vw", borderRadius: "50%",
     background: `radial-gradient(circle, var(--accent-rose), transparent 70%)`,
-    filter: "blur(80px)", animationName: "auroraDriftC", animationTimingFunction: "ease-in-out", animationIterationCount: "infinite",
-    pointerEvents: "none", zIndex: 0, transition: "opacity 0.6s ease"
+    filter: "blur(80px)", opacity: 0.14,
+    pointerEvents: "none", zIndex: 0
   },
   main: { flex: 1, boxSizing: "border-box", minHeight: "100vh", overflowY: "auto", position: "relative", zIndex: 1 }
 };
