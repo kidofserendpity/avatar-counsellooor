@@ -1,5 +1,6 @@
 import { useEffect, useState, useCallback, useRef } from "react";
 import axios from "axios";
+import { motion, AnimatePresence } from "motion/react";
 import { Lightbulb, Heart, Flame, Target, Moon, Image, CloudRain, FileText, Archive, ArchiveRestore, Trash2, ChevronDown, Check, Sparkles } from "lucide-react";
 import { theme } from "../theme";
 
@@ -23,7 +24,7 @@ const WRITING_PROMPTS = [
   "What's a conversation you wish you could have again?",
   "What's something you're proud of that nobody noticed?",
   "Write to someone you haven't said something to yet.",
-  "What's weighing on you that you haven't put into words?",
+  "What's something weighing on you that you haven't put into words?",
   "Describe how you actually feel right now, not how you're supposed to feel.",
   "What's something small that went right today?",
   "What do you wish someone had asked you today?",
@@ -153,7 +154,7 @@ function JournalView({ apiBase }) {
         <div style={styles.composerColumn}>
           <h1 style={styles.title}>Journal</h1>
           <p style={styles.sub}>
-            Private writing space. A.R.I.A can talk with you about anything here if you bring it up — she won't raise it on her own.
+            Private writing space. A.R.I.A can talk with you about anything here if you bring it up, she won't raise it on her own.
           </p>
 
           {activePrompt && (
@@ -204,38 +205,48 @@ function JournalView({ apiBase }) {
 
           {loaded && visible.length === 0 && (
             <p style={styles.emptyState}>
-              {showArchived ? "No archived entries." : "Nothing here yet — your first one starts on the left."}
+              {showArchived ? "No archived entries." : "Nothing here yet, your first one starts on the left."}
             </p>
           )}
 
           <div style={styles.entryGrid}>
-            {visible.map((entry) => {
-              const meta = CATEGORY_META[entry.category] || CATEGORY_META.other;
-              const CategoryIcon = meta.Icon;
-              return (
-                <div key={entry.id} style={styles.entryCard}>
-                  <div style={styles.entryHeader}>
-                    <div style={{ ...styles.categoryChip, color: meta.color, borderColor: meta.color }}>
-                      <CategoryIcon size={12} />
-                      {meta.label}
+            <AnimatePresence>
+              {visible.map((entry) => {
+                const meta = CATEGORY_META[entry.category] || CATEGORY_META.other;
+                const CategoryIcon = meta.Icon;
+                return (
+                  <motion.div
+                    key={entry.id}
+                    style={styles.entryCard}
+                    layout
+                    initial={{ opacity: 0, scale: 0.92 }}
+                    animate={{ opacity: 1, scale: 1 }}
+                    exit={{ opacity: 0, scale: 0.9 }}
+                    transition={{ duration: 0.22, ease: "easeOut" }}
+                  >
+                    <div style={styles.entryHeader}>
+                      <div style={{ ...styles.categoryChip, color: meta.color, borderColor: meta.color }}>
+                        <CategoryIcon size={12} />
+                        {meta.label}
+                      </div>
+                      <div style={styles.entryActions}>
+                        <button style={styles.iconButton} onClick={() => toggleArchive(entry.id, entry.archived)} title={entry.archived ? "Unarchive" : "Archive"}>
+                          {entry.archived ? <ArchiveRestore size={15} /> : <Archive size={15} />}
+                        </button>
+                        <button style={styles.iconButton} onClick={() => deleteEntry(entry.id)} title="Delete">
+                          <Trash2 size={15} />
+                        </button>
+                      </div>
                     </div>
-                    <div style={styles.entryActions}>
-                      <button style={styles.iconButton} onClick={() => toggleArchive(entry.id, entry.archived)} title={entry.archived ? "Unarchive" : "Archive"}>
-                        {entry.archived ? <ArchiveRestore size={15} /> : <Archive size={15} />}
-                      </button>
-                      <button style={styles.iconButton} onClick={() => deleteEntry(entry.id)} title="Delete">
-                        <Trash2 size={15} />
-                      </button>
+                    <div style={styles.entryDate}>
+                      {new Date(entry.timestamp).toLocaleDateString(undefined, { weekday: "short", month: "short", day: "numeric" })}
                     </div>
-                  </div>
-                  <div style={styles.entryDate}>
-                    {new Date(entry.timestamp).toLocaleDateString(undefined, { weekday: "short", month: "short", day: "numeric" })}
-                  </div>
-                  {entry.subject && <div style={styles.entrySubject}>{entry.subject}</div>}
-                  <p style={styles.entryText}>{entry.text}</p>
-                </div>
-              );
-            })}
+                    {entry.subject && <div style={styles.entrySubject}>{entry.subject}</div>}
+                    <p style={styles.entryText}>{entry.text}</p>
+                  </motion.div>
+                );
+              })}
+            </AnimatePresence>
           </div>
         </div>
       </div>

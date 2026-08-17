@@ -11,9 +11,11 @@ import HomeView from "./views/HomeView";
 import TalkView from "./views/TalkView";
 import JournalView from "./views/JournalView";
 import HistoryView from "./views/HistoryView";
+import { motion, AnimatePresence } from "motion/react";
 import InsightsView from "./views/InsightsView";
 import SettingsView from "./views/SettingsView";
 import BreatheView from "./views/BreatheView";
+
 import { theme } from "./theme";
 import { useIsMobile } from "./hooks/useIsMobile";
 import { refreshUserIdHeader, hasResolvedIdentity } from "./utils/userId";
@@ -533,7 +535,17 @@ function App() {
       )}
       {!isMobile && <Sidebar activeView={activeView} onNavigate={navigateTo} />}
       <main style={{ ...styles.main, padding: isMobile ? "20px 16px 90px" : "36px 48px" }}>
-        {renderView()}
+       <AnimatePresence mode="wait">
+          <motion.div
+            key={activeView}
+            initial={{ opacity: 0, y: 8 }}
+            animate={{ opacity: 1, y: 0 }}
+            exit={{ opacity: 0, y: -8 }}
+            transition={{ duration: 0.2, ease: "easeOut" }}
+          >
+            {renderView()}
+          </motion.div>
+        </AnimatePresence>
       </main>
       {isMobile && <BottomNav activeView={activeView} onNavigate={navigateTo} />}
       {showLivePrompt && <LiveSessionPrompt onChoose={handleLiveChoice} />}

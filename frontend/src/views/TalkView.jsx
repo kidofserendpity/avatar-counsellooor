@@ -1,5 +1,5 @@
 import { useState, useRef, useEffect } from "react";
-import { motion, AnimatePresence } from "motion/react";
+import { motion } from "motion/react";
 import { Mic, Square, Camera, Send } from "lucide-react";
 import { theme } from "../theme";
 import { useIsMobile } from "../hooks/useIsMobile";
@@ -36,6 +36,7 @@ function TalkView({
   const [elapsed, setElapsed] = useState(0);
   const [dragActive, setDragActive] = useState(false);
   const [absorbPreview, setAbsorbPreview] = useState(null);
+  const [inputFocused, setInputFocused] = useState(false);
   const videoRef = useRef(null);
   const video2Ref = useRef(null);
   const chatEndRef = useRef(null);
@@ -102,12 +103,8 @@ function TalkView({
     if (!file || !file.type.startsWith("image/")) return;
     const previewUrl = URL.createObjectURL(file);
     const caption = message.trim();
-    setAbsorbPreview({ url: previewUrl, key: Date.now() });
+    setAbsorbPreview({ url: previewUrl, key: Date.now(), file, caption });
     setMessage("");
-    setTimeout(() => {
-      setAbsorbPreview(null);
-      sendImage(file, caption);
-    }, 650);
   };
 
   const handleDrop = (e) => {
@@ -135,21 +132,10 @@ function TalkView({
   };
 
   const orbState = imageLoading ? "seeing" : speaking ? "speaking" : recording ? "listening" : loading ? "thinking" : "idle";
-
-  // Each state gets its own gentle scale loop (or a single spring jump for
-  // "speaking"), so Motion can own the whole orb motion instead of the old
-  // fixed-duration CSS @keyframes. Durations match what the CSS versions used.
-  const orbScaleTarget = speaking ? 1.05
-    : orbState === "idle" ? [1, 1.03, 1]
-    : orbState === "thinking" ? [1, 1.06, 1]
-    : orbState === "seeing" ? [1, 1.08, 1]
-    : 1;
-
-  const orbScaleTransition = speaking || orbState === "listening"
-    ? { type: "spring", stiffness: 200, damping: 18 }
-    : orbState === "idle" ? { duration: 4.5, repeat: Infinity, ease: "easeInOut" }
-    : orbState === "thinking" ? { duration: 1.4, repeat: Infinity, ease: "easeInOut" }
-    : { duration: 1, repeat: Infinity, ease: "easeInOut" }; // seeing
+  const orbAnimation =
+    orbState === "idle" ? "orbBreathe 4.5s ease-in-out infinite" :
+    orbState === "thinking" ? "orbThink 1.4s ease-in-out infinite" :
+    orbState === "seeing" ? "orbSee 1s ease-in-out infinite" : "none";
 
   const liveStatusLabel = !liveMode
     ? null
@@ -187,17 +173,14 @@ function TalkView({
           style={{ ...styles.orbStage, width: `${orbSize}px`, height: `${orbSize}px`, cursor: "pointer" }}
           onClick={handleOrbTap}
         >
-          <motion.div
-            style={styles.orbRing}
-            animate={{
-              filter: speaking ? "none" : (SENTIMENT_FILTER[sentiment] || "none"),
+          <div
+            style={{
+              ...styles.orbRing,
+              filter: speaking ? "none" : SENTIMENT_FILTER[sentiment] || "none",
               boxShadow: GLOW_BY_STATE[orbState],
-              scale: orbScaleTarget
-            }}
-            transition={{
-              filter: { duration: 0.6, ease: "easeInOut" },
-              boxShadow: { duration: 0.8, ease: "easeInOut" },
-              scale: orbScaleTransition
+              transform: speaking ? "scale(1.05)" : "scale(1)",
+              animation: orbAnimation,
+              transition: "box-shadow 0.8s ease-in-out, transform 0.8s ease-in-out"
             }}
           >
             <video ref={videoRef} muted playsInline loop={false}
@@ -210,42 +193,25 @@ function TalkView({
               <source src="/orb.webm" type="video/webm" />
               <source src="/orb.mp4" type="video/mp4" />
             </video>
-          </motion.div>
-          <AnimatePresence>
-            {orbState === "listening" && (
-              <motion.div
-                key="listen-ring"
-                style={styles.listenRing}
-                initial={{ opacity: 0, scale: 1 }}
-                animate={{ opacity: [0.6, 0], scale: [1, 1.35] }}
-                exit={{ opacity: 0 }}
-                transition={{ duration: 1.1, repeat: Infinity, ease: "easeOut" }}
-              />
-            )}
-            {speaking && (
-              <motion.div
-                key="pulse-ring"
-                style={styles.pulseRing}
-                initial={{ opacity: 0, scale: 1 }}
-                animate={{ opacity: [0.6, 0], scale: [1, 1.4] }}
-                exit={{ opacity: 0 }}
-                transition={{ duration: 1.2, repeat: Infinity, ease: "easeOut" }}
-              />
-            )}
-            {dragActive && (
-              <motion.div
-                key="drag-ring"
-                style={styles.dragRing}
-                initial={{ opacity: 0, scale: 1 }}
-                animate={{ opacity: [0.5, 1, 0.5], scale: [1, 1.03, 1] }}
-                exit={{ opacity: 0 }}
-                transition={{ duration: 1.4, repeat: Infinity, ease: "easeInOut" }}
-              />
-            )}
-          </AnimatePresence>
+          </div>
+          {orbState === "listening" && <div style={styles.listenRing} />}
+          {speaking && <div style={styles.pulseRing} />}
+          {dragActive && <div style={styles.dragRing} />}
           {dragActive && <p style={styles.dragLabel}>Drop to show A.R.I.A</p>}
           {absorbPreview && (
-            <img key={absorbPreview.key} src={absorbPreview.url} alt="Sending to A.R.I.A" style={styles.absorbImage} />
+            <motion.img
+              key={absorbPreview.key}
+              src={absorbPreview.url}
+              alt="Sending to A.R.I.A"
+              style={styles.absorbImage}
+              initial={{ scale: 1, y: 0, rotate: 0, opacity: 1 }}
+              animate={{ scale: 0.05, y: 60, rotate: 12, opacity: 0 }}
+              transition={{ duration: 0.65, ease: "easeIn" }}
+              onAnimationComplete={() => {
+                sendImage(absorbPreview.file, absorbPreview.caption);
+                setAbsorbPreview(null);
+              }}
+            />
           )}
         </div>
 
@@ -261,7 +227,15 @@ function TalkView({
       </div>
 
       {!liveMode && (
-        <div style={styles.inputBar}>
+        <motion.div
+          style={styles.inputBar}
+          animate={{
+            boxShadow: inputFocused
+              ? "0 0 0 1px rgba(155,107,255,0.55), 0 0 26px 4px rgba(155,107,255,0.28)"
+              : "0 0 0 0px rgba(155,107,255,0), 0 0 0px 0px rgba(155,107,255,0)"
+          }}
+          transition={{ duration: 0.25, ease: "easeOut" }}
+        >
           <button style={styles.pillIconButton} onClick={() => fileInputRef.current?.click()}>
             <Camera size={16} color={theme.muted} />
           </button>
@@ -280,6 +254,8 @@ function TalkView({
             value={message}
             onChange={(e) => setMessage(e.target.value)}
             onKeyDown={(e) => e.key === "Enter" && sendMessage()}
+            onFocus={() => setInputFocused(true)}
+            onBlur={() => setInputFocused(false)}
             placeholder="Say anything…"
           />
           <button
@@ -291,46 +267,38 @@ function TalkView({
           <button style={styles.pillSendButton} onClick={() => sendMessage()}>
             <Send size={15} color="#120e1c" />
           </button>
-        </div>
+        </motion.div>
       )}
 
-      <AnimatePresence>
-        {showTranscript && (
-          <motion.div
-            style={{ ...styles.transcriptPanel, ...(isMobile ? styles.transcriptPanelMobile : styles.transcriptPanelDesktop) }}
-            initial={{ opacity: 0, y: 16 }}
-            animate={{ opacity: 1, y: 0 }}
-            exit={{ opacity: 0, y: 16 }}
-            transition={{ duration: 0.25, ease: "easeOut" }}
-          >
-            {conversation.length === 0 && !loading && (
-              <p style={styles.emptyState}>Nothing here yet — say whatever's on your mind, or drop a photo on the orb.</p>
-            )}
-            {conversation.map((msg, index) => (
-              <div key={index} style={{
-                ...styles.message,
-                alignSelf: msg.role === "user" ? "flex-end" : "flex-start",
-                background: msg.isCrisis ? theme.crisis
-                  : msg.role === "user" ? `linear-gradient(135deg, ${theme.purple}, ${theme.purpleDeep})`
-                  : theme.bgElevated
-              }}>
-                {msg.imageUrl && <img src={msg.imageUrl} alt="Shared" style={styles.messageImage} />}
-                {msg.content && <p style={styles.messageText}>{msg.content}</p>}
+      {showTranscript && (
+        <div style={{ ...styles.transcriptPanel, ...(isMobile ? styles.transcriptPanelMobile : styles.transcriptPanelDesktop) }}>
+          {conversation.length === 0 && !loading && (
+            <p style={styles.emptyState}>Nothing here yet, say whatever's on your mind, or drop a photo on the orb.</p>
+          )}
+          {conversation.map((msg, index) => (
+            <div key={index} style={{
+              ...styles.message,
+              alignSelf: msg.role === "user" ? "flex-end" : "flex-start",
+              background: msg.isCrisis ? theme.crisis
+                : msg.role === "user" ? `linear-gradient(135deg, ${theme.purple}, ${theme.purpleDeep})`
+                : theme.bgElevated
+            }}>
+              {msg.imageUrl && <img src={msg.imageUrl} alt="Shared" style={styles.messageImage} />}
+              {msg.content && <p style={styles.messageText}>{msg.content}</p>}
+            </div>
+          ))}
+          {(loading || imageLoading) && (
+            <div style={{ ...styles.message, alignSelf: "flex-start", background: theme.bgElevated }}>
+              <div style={styles.typingDots}>
+                <span style={{ ...styles.typingDot, animationDelay: "0s" }} />
+                <span style={{ ...styles.typingDot, animationDelay: "0.15s" }} />
+                <span style={{ ...styles.typingDot, animationDelay: "0.3s" }} />
               </div>
-            ))}
-            {(loading || imageLoading) && (
-              <div style={{ ...styles.message, alignSelf: "flex-start", background: theme.bgElevated }}>
-                <div style={styles.typingDots}>
-                  <span style={{ ...styles.typingDot, animationDelay: "0s" }} />
-                  <span style={{ ...styles.typingDot, animationDelay: "0.15s" }} />
-                  <span style={{ ...styles.typingDot, animationDelay: "0.3s" }} />
-                </div>
-              </div>
-            )}
-            <div ref={chatEndRef} />
-          </motion.div>
-        )}
-      </AnimatePresence>
+            </div>
+          )}
+          <div ref={chatEndRef} />
+        </div>
+      )}
     </div>
   );
 }
@@ -366,15 +334,15 @@ const styles = {
   orbVideo: { width: "100%", height: "100%", objectFit: "cover", borderRadius: "50%" },
   listenRing: {
     position: "absolute", width: "88%", height: "88%", borderRadius: "50%",
-    border: `2px solid ${theme.purple}`
+    border: `2px solid ${theme.purple}`, animation: "orbListen 1.1s ease-out infinite"
   },
   pulseRing: {
     position: "absolute", width: "100%", height: "100%", borderRadius: "50%",
-    border: `2px solid rgba(155,107,255,0.6)`
+    border: `2px solid rgba(155,107,255,0.6)`, animation: "orbPulse 1.2s ease-out infinite"
   },
   dragRing: {
     position: "absolute", width: "104%", height: "104%", borderRadius: "50%",
-    border: `2px dashed ${theme.purple}`,
+    border: `2px dashed ${theme.purple}`, animation: "dragRingPulse 1.4s ease-in-out infinite",
     pointerEvents: "none"
   },
   dragLabel: {
@@ -384,7 +352,7 @@ const styles = {
   absorbImage: {
     position: "absolute", width: "110px", height: "110px", objectFit: "cover",
     borderRadius: "14px", boxShadow: "0 8px 24px rgba(0,0,0,0.4)",
-    animation: "imageAbsorb 0.65s ease-in forwards", zIndex: 5, pointerEvents: "none"
+    zIndex: 5, pointerEvents: "none"
   },
   stateLabel: { color: theme.mutedDim, fontSize: "11px", letterSpacing: "1.5px", textTransform: "uppercase" },
   stopButton: {
@@ -413,7 +381,7 @@ const styles = {
   transcriptPanel: {
     position: "fixed", zIndex: 60, display: "flex", flexDirection: "column", gap: "10px",
     overflowY: "auto", backgroundColor: theme.panel, backdropFilter: "blur(10px)",
-    border: `1px solid ${theme.border}`, boxSizing: "border-box"
+    border: `1px solid ${theme.border}`, boxSizing: "border-box", animation: "panelSlideUp 0.25s ease"
   },
   transcriptPanelDesktop: { top: "90px", bottom: "110px", right: "20px", width: "320px", borderRadius: "16px", padding: "16px" },
   transcriptPanelMobile: { left: "12px", right: "12px", bottom: "84px", maxHeight: "45vh", borderRadius: "16px", padding: "14px" },
