@@ -1,4 +1,5 @@
 import { useState, useRef, useEffect } from "react";
+import { motion, AnimatePresence } from "motion/react";
 import { animate } from "animejs";
 import axios from "axios";
 import Sidebar from "./components/Sidebar";
@@ -11,11 +12,9 @@ import HomeView from "./views/HomeView";
 import TalkView from "./views/TalkView";
 import JournalView from "./views/JournalView";
 import HistoryView from "./views/HistoryView";
-import { motion, AnimatePresence } from "motion/react";
 import InsightsView from "./views/InsightsView";
 import SettingsView from "./views/SettingsView";
 import BreatheView from "./views/BreatheView";
-
 import { theme } from "./theme";
 import { useIsMobile } from "./hooks/useIsMobile";
 import { refreshUserIdHeader, hasResolvedIdentity } from "./utils/userId";
@@ -62,6 +61,27 @@ function isLikelyHallucination(text) {
   const wordCount = trimmed.split(/\s+/).length;
   if (wordCount > 4) return false;
   return HALLUCINATION_PATTERNS.some((pattern) => pattern.test(trimmed));
+}
+
+// A soft light that trails the cursor across the whole shell, the kind of
+// ambient interactivity seen on sites like Linear and Vercel's dark UIs.
+// Pointer-events are disabled so it never blocks clicks underneath it.
+function CursorGlow() {
+  const [pos, setPos] = useState({ x: -400, y: -400 });
+
+  useEffect(() => {
+    const handleMove = (e) => setPos({ x: e.clientX, y: e.clientY });
+    window.addEventListener("mousemove", handleMove);
+    return () => window.removeEventListener("mousemove", handleMove);
+  }, []);
+
+  return (
+    <motion.div
+      style={styles.cursorGlow}
+      animate={{ x: pos.x - 300, y: pos.y - 300 }}
+      transition={{ type: "spring", stiffness: 60, damping: 20, mass: 0.8 }}
+    />
+  );
 }
 
 function attachSpeechMonitor(stream, hasSpeechRef, options = {}) {
@@ -533,9 +553,11 @@ function App() {
           <div ref={auroraCRef} style={styles.auroraC} />
         </>
       )}
+      {!isMobile && <CursorGlow />}
+      <div style={styles.grain} />
       {!isMobile && <Sidebar activeView={activeView} onNavigate={navigateTo} />}
-      <main style={{ ...styles.main, padding: isMobile ? "20px 16px 90px" : "36px 48px" }}>
-       <AnimatePresence mode="wait">
+      <main style={{ ...styles.main, padding: isMobile ? "20px 16px 90px" : "36px 48px 36px 156px" }}>
+        <AnimatePresence mode="wait">
           <motion.div
             key={activeView}
             initial={{ opacity: 0, y: 8 }}
@@ -574,7 +596,16 @@ const styles = {
     filter: "blur(80px)", opacity: 0.14,
     pointerEvents: "none", zIndex: 0
   },
-  main: { flex: 1, boxSizing: "border-box", minHeight: "100vh", overflowY: "auto", position: "relative", zIndex: 1 }
+  main: { flex: 1, boxSizing: "border-box", minHeight: "100vh", overflowY: "auto", position: "relative", zIndex: 1 },
+  cursorGlow: {
+    position: "fixed", top: 0, left: 0, width: "600px", height: "600px", borderRadius: "50%",
+    pointerEvents: "none", zIndex: 2, mixBlendMode: "screen",
+    background: "radial-gradient(circle, rgba(155,107,255,0.10), transparent 70%)"
+  },
+  grain: {
+    position: "fixed", inset: 0, zIndex: 3, pointerEvents: "none", opacity: 0.035, mixBlendMode: "overlay",
+    backgroundImage: "url(\"data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='120' height='120'%3E%3Cfilter id='n'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.9' numOctaves='2' stitchTiles='stitch'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23n)'/%3E%3C/svg%3E\")"
+  }
 };
 
 export default App;

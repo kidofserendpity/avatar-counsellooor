@@ -181,7 +181,7 @@ function HomeView({ apiBase, onNavigate }) {
 }
 
 const styles = {
-  wrap: { maxWidth: "980px", width: "100%", boxSizing: "border-box" },
+  wrap: { maxWidth: "1040px", width: "100%", margin: "0 auto", boxSizing: "border-box" },
   headerRow: { marginBottom: "28px" },
   greeting: { fontFamily: theme.serif, fontWeight: 600, fontSize: "34px", margin: 0 },
   sub: { color: theme.muted, fontSize: "14px", marginTop: "6px" },
