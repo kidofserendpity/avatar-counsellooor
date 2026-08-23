@@ -80,17 +80,20 @@ Don't perform concern and don't assume the worst. React to what they actually de
 
 3-5 sentences, sound like you're actually listening to the specific thing they said. Always finish the thought. Never invent details about the person that weren't actually said. Never use markdown formatting like asterisks or bullet points — this gets read aloud exactly as written.`;
 
-const MEMORY_AND_STYLE_PROMPT = `You're analyzing one exchange between Aria and a person, for two separate purposes.
+const MEMORY_AND_STYLE_PROMPT = `You're analyzing one exchange between Aria and a person, for three separate purposes.
 
-1. FACT: Did this reveal a specific, durable fact about the person worth remembering for future conversations — a name, relationship, ongoing situation, preference, plan, recurring problem, strong opinion? Not a passing mood or one-off reaction. If yes, state it plainly in one short sentence, third person, under 15 words. If not, write NONE.
+1. FACT: Did this reveal a specific, durable fact about the person worth remembering for future conversations, a name, relationship, ongoing situation, preference, plan, recurring problem, strong opinion? Not a passing mood or one-off reaction. If yes, state it plainly in one short sentence, third person, under 15 words. If not, write NONE.
 
-2. Classify the person's message itself (not Aria's reply):
+2. TOPIC: In under 12 words, what was this specific exchange actually about? Plain and specific, like "debugging a React state bug" or "venting about a rough day at work", not a summary of Aria's reply.
+
+3. Classify the person's message itself (not Aria's reply):
 LENGTH: "short" if it's a brief, low-effort message (a few words), "long" if it's a detailed, expressive message (multiple sentences), otherwise "medium".
 HUMOR: "yes" if it includes joking, teasing, sarcasm, or laughter markers, otherwise "no".
-FORMALITY: "formal" if it's properly punctuated/structured like formal writing, "casual" if it's relaxed/slangy/abbreviated texting style, otherwise "neutral".
+FORMALITY: "formal" if it's properly punctuated or structured like formal writing, "casual" if it's relaxed, slangy, or abbreviated texting style, otherwise "neutral".
 
-Respond in exactly this format, four lines, nothing else:
+Respond in exactly this format, five lines, nothing else:
 FACT: <fact or NONE>
+TOPIC: <short topic phrase>
 LENGTH: short|medium|long
 HUMOR: yes|no
 FORMALITY: casual|neutral|formal`;
@@ -195,7 +198,7 @@ const getCrisisResponse = async (userMessage, tier, conversationHistory = [], me
 };
 
 const extractMemoryAndStyle = async (userMessage, ariaResponse) => {
-  const defaults = { fact: null, length: 'medium', humor: false, formality: 'neutral' };
+  const defaults = { fact: null, topic: null, length: 'medium', humor: false, formality: 'neutral' };
   try {
     const completion = await groq.chat.completions.create({
       model: 'openai/gpt-oss-120b',
@@ -203,20 +206,23 @@ const extractMemoryAndStyle = async (userMessage, ariaResponse) => {
         { role: 'system', content: MEMORY_AND_STYLE_PROMPT },
         { role: 'user', content: `Person: "${userMessage}"\nAria: "${ariaResponse}"` }
       ],
-      max_tokens: 80,
+      max_tokens: 90,
       temperature: 0.3,
     });
 
     const raw = completion.choices[0].message.content.trim();
     const factMatch = raw.match(/FACT:\s*(.+)/i);
+    const topicMatch = raw.match(/TOPIC:\s*(.+)/i);
     const lengthMatch = raw.match(/LENGTH:\s*(short|medium|long)/i);
     const humorMatch = raw.match(/HUMOR:\s*(yes|no)/i);
     const formalityMatch = raw.match(/FORMALITY:\s*(casual|neutral|formal)/i);
 
     const factText = factMatch ? factMatch[1].trim() : 'NONE';
+    const topicText = topicMatch ? topicMatch[1].trim() : '';
 
     return {
       fact: (factText === 'NONE' || factText.length < 3) ? null : factText,
+      topic: topicText.length >= 3 ? topicText : null,
       length: lengthMatch ? lengthMatch[1].toLowerCase() : defaults.length,
       humor: humorMatch ? humorMatch[1].toLowerCase() === 'yes' : defaults.humor,
       formality: formalityMatch ? formalityMatch[1].toLowerCase() : defaults.formality

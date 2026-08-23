@@ -35,7 +35,8 @@ const {
   setCrisisFlag,
   consumeCrisisCheckIn,
   buildMemoryBlock,
-  clearMemory
+  clearMemory,
+  updateLastTopic
 } = require('./memory');
 const { loadJournal, saveJournal, clearJournal, addEntry, deleteEntry, setArchived, summarizeForMemory } = require('./journal');
 const { loadFeedback, saveFeedback, addFeedback } = require('./feedback');
@@ -304,9 +305,10 @@ function generateCrisisAudioAndRespond(res, replyText, sentiment) {
 
 function recordMemoryAsync(userId, userMessage, ariaReply, memory, sentiment) {
   extractMemoryAndStyle(userMessage, ariaReply)
-    .then(({ fact, length, humor, formality }) => {
+    .then(({ fact, topic, length, humor, formality }) => {
       let updated = memory;
       if (fact) updated = addFact(updated, fact);
+      if (topic) updated = updateLastTopic(updated, topic);
       if (sentiment) updated = addMoodEntry(updated, sentiment);
       updated = updateStyle(updated, { length, humor, formality });
       updated.lastMessageTimestamp = Date.now();
