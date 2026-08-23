@@ -32,10 +32,11 @@ function defaultMemory() {
       formality: { casual: 0, neutral: 0, formal: 0 }
     }
   };
-  function updateLastTopic(memory, topic) {
+}
+
+function updateLastTopic(memory, topic) {
   if (!topic) return memory;
   return { ...memory, lastTopic: { text: topic, timestamp: Date.now() } };
-}
 }
 
 function loadMemory(userId) {
