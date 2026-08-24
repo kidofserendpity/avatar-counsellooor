@@ -1,6 +1,6 @@
 import { useEffect, useState, useCallback, useRef } from "react";
-import axios from "axios";
 import { motion, AnimatePresence } from "motion/react";
+import axios from "axios";
 import { Lightbulb, Heart, Flame, Target, Moon, Image, CloudRain, FileText, Archive, ArchiveRestore, Trash2, ChevronDown, Check, Sparkles } from "lucide-react";
 import { theme } from "../theme";
 
@@ -24,7 +24,7 @@ const WRITING_PROMPTS = [
   "What's a conversation you wish you could have again?",
   "What's something you're proud of that nobody noticed?",
   "Write to someone you haven't said something to yet.",
-  "What's something weighing on you that you haven't put into words?",
+  "What's weighing on you that you haven't put into words?",
   "Describe how you actually feel right now, not how you're supposed to feel.",
   "What's something small that went right today?",
   "What do you wish someone had asked you today?",
@@ -33,6 +33,11 @@ const WRITING_PROMPTS = [
   "If you could say one true thing right now, what would it be?",
   "What's something you needed to hear today?"
 ];
+
+const fadeUp = {
+  hidden: { opacity: 0, y: 14 },
+  visible: { opacity: 1, y: 0, transition: { duration: 0.45, ease: "easeOut" } }
+};
 
 function CategoryDropdown({ value, onChange, includeAll }) {
   const [open, setOpen] = useState(false);
@@ -50,34 +55,91 @@ function CategoryDropdown({ value, onChange, includeAll }) {
         <span>{current.label}</span>
         <ChevronDown size={14} color={theme.mutedDim} style={{ marginLeft: "4px", transform: open ? "rotate(180deg)" : "none", transition: "transform 0.15s ease" }} />
       </button>
-      {open && (
-        <>
-          <div style={styles.dropdownBackdrop} onClick={() => setOpen(false)} />
-          <div style={styles.dropdownPanel}>
-            {includeAll && (
-              <button
-                style={{ ...styles.dropdownOption, ...(value === "all" ? styles.dropdownOptionActive : {}) }}
-                onClick={() => { onChange("all"); setOpen(false); }}
-              >
-                <span style={styles.dropdownOptionLabel}>All categories</span>
-                {value === "all" && <Check size={14} color={theme.purpleBright} />}
-              </button>
-            )}
-            {Object.entries(CATEGORY_META).map(([key, meta]) => (
-              <button
-                key={key}
-                style={{ ...styles.dropdownOption, ...(value === key ? styles.dropdownOptionActive : {}) }}
-                onClick={() => { onChange(key); setOpen(false); }}
-              >
-                <meta.Icon size={14} color={meta.color} />
-                <span style={styles.dropdownOptionLabel}>{meta.label}</span>
-                {value === key && <Check size={14} color={theme.purpleBright} />}
-              </button>
-            ))}
-          </div>
-        </>
-      )}
+      <AnimatePresence>
+        {open && (
+          <>
+            <div style={styles.dropdownBackdrop} onClick={() => setOpen(false)} />
+            <motion.div
+              style={styles.dropdownPanel}
+              initial={{ opacity: 0, y: -6, scale: 0.98 }}
+              animate={{ opacity: 1, y: 0, scale: 1 }}
+              exit={{ opacity: 0, y: -6, scale: 0.98 }}
+              transition={{ duration: 0.15, ease: "easeOut" }}
+            >
+              {includeAll && (
+                <button
+                  style={{ ...styles.dropdownOption, ...(value === "all" ? styles.dropdownOptionActive : {}) }}
+                  onClick={() => { onChange("all"); setOpen(false); }}
+                >
+                  <span style={styles.dropdownOptionLabel}>All categories</span>
+                  {value === "all" && <Check size={14} color={theme.purpleBright} />}
+                </button>
+              )}
+              {Object.entries(CATEGORY_META).map(([key, meta]) => (
+                <button
+                  key={key}
+                  style={{ ...styles.dropdownOption, ...(value === key ? styles.dropdownOptionActive : {}) }}
+                  onClick={() => { onChange(key); setOpen(false); }}
+                >
+                  <meta.Icon size={14} color={meta.color} />
+                  <span style={styles.dropdownOptionLabel}>{meta.label}</span>
+                  {value === key && <Check size={14} color={theme.purpleBright} />}
+                </button>
+              ))}
+            </motion.div>
+          </>
+        )}
+      </AnimatePresence>
     </div>
+  );
+}
+
+function EntryCard({ entry, onToggleArchive, onDelete }) {
+  const [hovered, setHovered] = useState(false);
+  const meta = CATEGORY_META[entry.category] || CATEGORY_META.other;
+  const CategoryIcon = meta.Icon;
+
+  return (
+    <motion.div
+      variants={fadeUp}
+      style={styles.entryCard}
+      onMouseEnter={() => setHovered(true)}
+      onMouseLeave={() => setHovered(false)}
+      animate={{ y: hovered ? -2 : 0, borderColor: hovered ? meta.color : theme.border }}
+      transition={{ duration: 0.2, ease: "easeOut" }}
+    >
+      <div style={styles.entryHeader}>
+        <div style={{ ...styles.categoryChip, color: meta.color, borderColor: meta.color }}>
+          <CategoryIcon size={12} />
+          {meta.label}
+        </div>
+        <div style={styles.entryActions}>
+          <motion.button
+            style={styles.iconButton}
+            whileHover={{ scale: 1.12, color: theme.cream }}
+            whileTap={{ scale: 0.94 }}
+            onClick={() => onToggleArchive(entry.id, entry.archived)}
+            title={entry.archived ? "Unarchive" : "Archive"}
+          >
+            {entry.archived ? <ArchiveRestore size={15} /> : <Archive size={15} />}
+          </motion.button>
+          <motion.button
+            style={styles.iconButton}
+            whileHover={{ scale: 1.12, color: theme.crisis }}
+            whileTap={{ scale: 0.94 }}
+            onClick={() => onDelete(entry.id)}
+            title="Delete"
+          >
+            <Trash2 size={15} />
+          </motion.button>
+        </div>
+      </div>
+      <div style={styles.entryDate}>
+        {new Date(entry.timestamp).toLocaleDateString(undefined, { weekday: "short", month: "short", day: "numeric" })}
+      </div>
+      {entry.subject && <div style={styles.entrySubject}>{entry.subject}</div>}
+      <p style={styles.entryText}>{entry.text}</p>
+    </motion.div>
   );
 }
 
@@ -149,20 +211,33 @@ function JournalView({ apiBase }) {
     .reverse();
 
   return (
-    <div style={styles.wrap}>
+    <motion.div
+      style={styles.wrap}
+      initial="hidden"
+      animate="visible"
+      variants={{ visible: { transition: { staggerChildren: 0.07 } } }}
+    >
       <div style={styles.layout}>
-        <div style={styles.composerColumn}>
+        <motion.div variants={fadeUp} style={styles.composerColumn}>
           <h1 style={styles.title}>Journal</h1>
           <p style={styles.sub}>
-            Private writing space. A.R.I.A can talk with you about anything here if you bring it up, she won't raise it on her own.
+            Private writing space. A.R.I.A can talk with you about anything here if you bring it up — she won't raise it on her own.
           </p>
 
-          {activePrompt && (
-            <div style={styles.promptBox}>
-              <Sparkles size={14} color={theme.purpleBright} />
-              <span style={styles.promptText}>{activePrompt}</span>
-            </div>
-          )}
+          <AnimatePresence>
+            {activePrompt && (
+              <motion.div
+                style={styles.promptBox}
+                initial={{ opacity: 0, y: -6, height: 0 }}
+                animate={{ opacity: 1, y: 0, height: "auto" }}
+                exit={{ opacity: 0, y: -6, height: 0 }}
+                transition={{ duration: 0.2, ease: "easeOut" }}
+              >
+                <Sparkles size={14} color={theme.purpleBright} />
+                <span style={styles.promptText}>{activePrompt}</span>
+              </motion.div>
+            )}
+          </AnimatePresence>
 
           <div style={styles.composer}>
             <input
@@ -181,18 +256,29 @@ function JournalView({ apiBase }) {
             <div style={styles.composerFooter}>
               <div style={{ display: "flex", gap: "8px", alignItems: "center" }}>
                 <CategoryDropdown value={composeCategory} onChange={setComposeCategory} includeAll={false} />
-                <button style={styles.promptButton} onClick={showRandomPrompt}>
+                <motion.button
+                  style={styles.promptButton}
+                  whileHover={{ borderColor: theme.purple, color: theme.purpleBright }}
+                  whileTap={{ scale: 0.97 }}
+                  onClick={showRandomPrompt}
+                >
                   <Sparkles size={13} /> Need a prompt?
-                </button>
+                </motion.button>
               </div>
-              <button style={styles.saveButton} onClick={saveEntry} disabled={saving || !draft.trim()}>
+              <motion.button
+                style={styles.saveButton}
+                whileHover={{ scale: saving || !draft.trim() ? 1 : 1.03 }}
+                whileTap={{ scale: saving || !draft.trim() ? 1 : 0.97 }}
+                onClick={saveEntry}
+                disabled={saving || !draft.trim()}
+              >
                 {saving ? "Saving…" : "Save entry"}
-              </button>
+              </motion.button>
             </div>
           </div>
-        </div>
+        </motion.div>
 
-        <div style={styles.entriesColumn}>
+        <motion.div variants={fadeUp} style={styles.entriesColumn}>
           <div style={styles.controlsRow}>
             <CategoryDropdown value={categoryFilter} onChange={setCategoryFilter} includeAll={true} />
             <button
@@ -205,52 +291,23 @@ function JournalView({ apiBase }) {
 
           {loaded && visible.length === 0 && (
             <p style={styles.emptyState}>
-              {showArchived ? "No archived entries." : "Nothing here yet, your first one starts on the left."}
+              {showArchived ? "No archived entries." : "Nothing here yet — your first one starts on the left."}
             </p>
           )}
 
-          <div style={styles.entryGrid}>
-            <AnimatePresence>
-              {visible.map((entry) => {
-                const meta = CATEGORY_META[entry.category] || CATEGORY_META.other;
-                const CategoryIcon = meta.Icon;
-                return (
-                  <motion.div
-                    key={entry.id}
-                    style={styles.entryCard}
-                    layout
-                    initial={{ opacity: 0, scale: 0.92 }}
-                    animate={{ opacity: 1, scale: 1 }}
-                    exit={{ opacity: 0, scale: 0.9 }}
-                    transition={{ duration: 0.22, ease: "easeOut" }}
-                  >
-                    <div style={styles.entryHeader}>
-                      <div style={{ ...styles.categoryChip, color: meta.color, borderColor: meta.color }}>
-                        <CategoryIcon size={12} />
-                        {meta.label}
-                      </div>
-                      <div style={styles.entryActions}>
-                        <button style={styles.iconButton} onClick={() => toggleArchive(entry.id, entry.archived)} title={entry.archived ? "Unarchive" : "Archive"}>
-                          {entry.archived ? <ArchiveRestore size={15} /> : <Archive size={15} />}
-                        </button>
-                        <button style={styles.iconButton} onClick={() => deleteEntry(entry.id)} title="Delete">
-                          <Trash2 size={15} />
-                        </button>
-                      </div>
-                    </div>
-                    <div style={styles.entryDate}>
-                      {new Date(entry.timestamp).toLocaleDateString(undefined, { weekday: "short", month: "short", day: "numeric" })}
-                    </div>
-                    {entry.subject && <div style={styles.entrySubject}>{entry.subject}</div>}
-                    <p style={styles.entryText}>{entry.text}</p>
-                  </motion.div>
-                );
-              })}
-            </AnimatePresence>
-          </div>
-        </div>
+          <motion.div
+            style={styles.entryGrid}
+            initial="hidden"
+            animate="visible"
+            variants={{ visible: { transition: { staggerChildren: 0.04 } } }}
+          >
+            {visible.map((entry) => (
+              <EntryCard key={entry.id} entry={entry} onToggleArchive={toggleArchive} onDelete={deleteEntry} />
+            ))}
+          </motion.div>
+        </motion.div>
       </div>
-    </div>
+    </motion.div>
   );
 }
 
@@ -263,7 +320,7 @@ const styles = {
   sub: { color: theme.muted, fontSize: "14px", marginTop: "6px", marginBottom: "16px", lineHeight: 1.5 },
   promptBox: {
     display: "flex", alignItems: "center", gap: "8px", padding: "10px 14px", marginBottom: "12px",
-    borderRadius: "12px", backgroundColor: "rgba(155,107,255,0.1)", border: `1px solid ${theme.border}`
+    borderRadius: "12px", backgroundColor: "rgba(155,107,255,0.1)", border: `1px solid ${theme.border}`, overflow: "hidden"
   },
   promptText: { color: theme.cream, fontSize: "13px", fontStyle: "italic" },
   composer: {

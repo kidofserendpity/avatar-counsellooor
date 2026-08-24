@@ -1,7 +1,13 @@
 import { useState } from "react";
+import { motion, AnimatePresence } from "motion/react";
 import axios from "axios";
 import { Search, MessageCircle } from "lucide-react";
 import { theme } from "../theme";
+
+const fadeUp = {
+  hidden: { opacity: 0, y: 14 },
+  visible: { opacity: 1, y: 0, transition: { duration: 0.45, ease: "easeOut" } }
+};
 
 function HistoryView({ apiBase }) {
   const [query, setQuery] = useState("");
@@ -29,11 +35,16 @@ function HistoryView({ apiBase }) {
   };
 
   return (
-    <div style={styles.wrap}>
-      <h1 style={styles.title}>History</h1>
-      <p style={styles.sub}>Look back on past conversations, or search for something specific you remember saying.</p>
+    <motion.div
+      style={styles.wrap}
+      initial="hidden"
+      animate="visible"
+      variants={{ visible: { transition: { staggerChildren: 0.07 } } }}
+    >
+      <motion.h1 variants={fadeUp} style={styles.title}>History</motion.h1>
+      <motion.p variants={fadeUp} style={styles.sub}>Look back on past conversations, or search for something specific you remember saying.</motion.p>
 
-      <form style={styles.searchRow} onSubmit={handleSearch}>
+      <motion.form variants={fadeUp} style={styles.searchRow} onSubmit={handleSearch}>
         <div style={styles.searchBox}>
           <Search size={16} color={theme.mutedDim} />
           <input
@@ -43,34 +54,56 @@ function HistoryView({ apiBase }) {
             placeholder="Search past conversations…"
           />
         </div>
-        <button style={styles.searchButton} type="submit">Search</button>
+        <motion.button style={styles.searchButton} whileHover={{ scale: 1.03 }} whileTap={{ scale: 0.97 }} type="submit">
+          Search
+        </motion.button>
         {query && (
-          <button type="button" style={styles.clearButton} onClick={() => { setQuery(""); runSearch(""); }}>
+          <motion.button
+            type="button"
+            style={styles.clearButton}
+            whileHover={{ borderColor: theme.purple, color: theme.purpleBright }}
+            whileTap={{ scale: 0.96 }}
+            onClick={() => { setQuery(""); runSearch(""); }}
+          >
             Clear
-          </button>
+          </motion.button>
         )}
-      </form>
+      </motion.form>
 
       {!loaded && (
-        <p style={styles.emptyState}>Search above, or hit Search with nothing typed to see your most recent messages.</p>
+        <motion.p variants={fadeUp} style={styles.emptyState}>Search above, or hit Search with nothing typed to see your most recent messages.</motion.p>
       )}
       {loaded && !loading && results.length === 0 && (
-        <p style={styles.emptyState}>Nothing matched that.</p>
+        <motion.p variants={fadeUp} style={styles.emptyState}>Nothing matched that.</motion.p>
       )}
 
-      <div style={styles.resultList}>
-        {results.map((msg, i) => (
-          <div key={i} style={{ ...styles.resultCard, borderColor: msg.role === "user" ? theme.purple : theme.border }}>
-            <div style={styles.resultHeader}>
-              <MessageCircle size={13} color={msg.role === "user" ? theme.purpleBright : theme.teal} />
-              <span style={styles.resultRole}>{msg.role === "user" ? "You" : "A.R.I.A"}</span>
-              <span style={styles.resultDate}>{new Date(msg.timestamp).toLocaleString()}</span>
-            </div>
-            <p style={styles.resultText}>{msg.content}</p>
-          </div>
-        ))}
-      </div>
-    </div>
+      <motion.div
+        style={styles.resultList}
+        initial="hidden"
+        animate="visible"
+        variants={{ visible: { transition: { staggerChildren: 0.04 } } }}
+      >
+        <AnimatePresence>
+          {results.map((msg, i) => (
+            <motion.div
+              key={i}
+              variants={fadeUp}
+              initial="hidden"
+              animate="visible"
+              exit={{ opacity: 0 }}
+              style={{ ...styles.resultCard, borderColor: msg.role === "user" ? theme.purple : theme.border }}
+            >
+              <div style={styles.resultHeader}>
+                <MessageCircle size={13} color={msg.role === "user" ? theme.purpleBright : theme.teal} />
+                <span style={styles.resultRole}>{msg.role === "user" ? "You" : "A.R.I.A"}</span>
+                <span style={styles.resultDate}>{new Date(msg.timestamp).toLocaleString()}</span>
+              </div>
+              <p style={styles.resultText}>{msg.content}</p>
+            </motion.div>
+          ))}
+        </AnimatePresence>
+      </motion.div>
+    </motion.div>
   );
 }
 

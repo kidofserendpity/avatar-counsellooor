@@ -1,4 +1,5 @@
 import { useEffect, useState } from "react";
+import { motion } from "motion/react";
 import axios from "axios";
 import { BookOpen, Archive, Tag } from "lucide-react";
 import MoodChart from "../components/MoodChart";
@@ -9,27 +10,43 @@ const CATEGORY_LABELS = {
   dream: "Dream", memory: "Memory", worry: "Worry", other: "Other"
 };
 
-function CountUpNumber({ value }) {
-  const [display, setDisplay] = useState(0);
+const fadeUp = {
+  hidden: { opacity: 0, y: 14 },
+  visible: { opacity: 1, y: 0, transition: { duration: 0.45, ease: "easeOut" } }
+};
 
+// Small dependency-free count-up for the two numeric stats.
+function useCountUp(target, duration = 700) {
+  const [value, setValue] = useState(0);
   useEffect(() => {
+    let start;
     let raf;
-    const start = Date.now();
-    const duration = 700;
-    const from = 0;
-
-    const tick = () => {
-      const elapsed = Date.now() - start;
-      const progress = Math.min(1, elapsed / duration);
-      const eased = 1 - Math.pow(1 - progress, 3);
-      setDisplay(Math.round(from + (value - from) * eased));
-      if (progress < 1) raf = requestAnimationFrame(tick);
+    const step = (ts) => {
+      if (start === undefined) start = ts;
+      const progress = Math.min((ts - start) / duration, 1);
+      setValue(Math.round(progress * target));
+      if (progress < 1) raf = requestAnimationFrame(step);
     };
-    raf = requestAnimationFrame(tick);
+    raf = requestAnimationFrame(step);
     return () => cancelAnimationFrame(raf);
-  }, [value]);
+  }, [target, duration]);
+  return value;
+}
 
-  return <>{display}</>;
+function StatCard({ children }) {
+  const [hovered, setHovered] = useState(false);
+  return (
+    <motion.div
+      variants={fadeUp}
+      style={styles.statCard}
+      onMouseEnter={() => setHovered(true)}
+      onMouseLeave={() => setHovered(false)}
+      animate={{ y: hovered ? -3 : 0, borderColor: hovered ? theme.purple : theme.border }}
+      transition={{ duration: 0.2, ease: "easeOut" }}
+    >
+      {children}
+    </motion.div>
+  );
 }
 
 function InsightsView({ apiBase }) {
@@ -43,6 +60,8 @@ function InsightsView({ apiBase }) {
 
   const active = entries.filter((e) => !e.archived);
   const archivedCount = entries.filter((e) => e.archived).length;
+  const activeCountDisplay = useCountUp(active.length);
+  const archivedCountDisplay = useCountUp(archivedCount);
 
   let topCategory = "—";
   if (active.length > 0) {
@@ -53,31 +72,38 @@ function InsightsView({ apiBase }) {
   }
 
   return (
-    <div style={styles.wrap}>
-      <h1 style={styles.title}>Insights</h1>
-      <p style={styles.sub}>A quiet look at the pattern, not a scoreboard.</p>
+    <motion.div
+      style={styles.wrap}
+      initial="hidden"
+      animate="visible"
+      variants={{ visible: { transition: { staggerChildren: 0.07 } } }}
+    >
+      <motion.h1 variants={fadeUp} style={styles.title}>Insights</motion.h1>
+      <motion.p variants={fadeUp} style={styles.sub}>A quiet look at the pattern, not a scoreboard.</motion.p>
 
       <div style={styles.statRow}>
-        <div style={styles.statCard}>
+        <StatCard>
           <BookOpen size={18} color={theme.purpleBright} />
-          <div style={{ ...styles.statNumber, ...theme.gradientText }}><CountUpNumber value={active.length} /></div>
+          <div style={{ ...styles.statNumber, ...theme.gradientText }}>{activeCountDisplay}</div>
           <div style={styles.statLabel}>Journal entries</div>
-        </div>
-        <div style={styles.statCard}>
+        </StatCard>
+        <StatCard>
           <Tag size={18} color={theme.teal} />
           <div style={styles.statText}>{topCategory}</div>
           <div style={styles.statLabel}>Most common theme</div>
-        </div>
-        <div style={styles.statCard}>
+        </StatCard>
+        <StatCard>
           <Archive size={18} color={theme.rose} />
-          <div style={{ ...styles.statNumber, ...theme.gradientText }}><CountUpNumber value={archivedCount} /></div>
+          <div style={{ ...styles.statNumber, ...theme.gradientText }}>{archivedCountDisplay}</div>
           <div style={styles.statLabel}>Archived entries</div>
-        </div>
+        </StatCard>
       </div>
 
-      <div style={styles.sectionLabel}>MOOD OVER TIME</div>
-      <MoodChart apiBase={apiBase} />
-    </div>
+      <motion.div variants={fadeUp} style={styles.sectionLabel}>MOOD OVER TIME</motion.div>
+      <motion.div variants={fadeUp}>
+        <MoodChart apiBase={apiBase} />
+      </motion.div>
+    </motion.div>
   );
 }
 
@@ -87,7 +113,7 @@ const styles = {
   sub: { color: theme.muted, fontSize: "14px", marginTop: "6px", marginBottom: "28px" },
   statRow: { display: "flex", gap: "14px", marginBottom: "28px", flexWrap: "wrap" },
   statCard: {
-    flex: "1 1 180px", backgroundColor: theme.bgElevated, border: `1px solid ${theme.border}`,
+    flex: "1 1 180px", backgroundColor: theme.bgElevated, border: "1px solid",
     borderRadius: "16px", padding: "20px 22px", display: "flex", flexDirection: "column", gap: "10px"
   },
   statNumber: { fontFamily: theme.serif, fontWeight: 700, fontSize: "28px" },
