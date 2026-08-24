@@ -9,6 +9,29 @@ const CATEGORY_LABELS = {
   dream: "Dream", memory: "Memory", worry: "Worry", other: "Other"
 };
 
+function CountUpNumber({ value }) {
+  const [display, setDisplay] = useState(0);
+
+  useEffect(() => {
+    let raf;
+    const start = Date.now();
+    const duration = 700;
+    const from = 0;
+
+    const tick = () => {
+      const elapsed = Date.now() - start;
+      const progress = Math.min(1, elapsed / duration);
+      const eased = 1 - Math.pow(1 - progress, 3);
+      setDisplay(Math.round(from + (value - from) * eased));
+      if (progress < 1) raf = requestAnimationFrame(tick);
+    };
+    raf = requestAnimationFrame(tick);
+    return () => cancelAnimationFrame(raf);
+  }, [value]);
+
+  return <>{display}</>;
+}
+
 function InsightsView({ apiBase }) {
   const [entries, setEntries] = useState([]);
 
@@ -32,12 +55,12 @@ function InsightsView({ apiBase }) {
   return (
     <div style={styles.wrap}>
       <h1 style={styles.title}>Insights</h1>
-      <p style={styles.sub}>A quiet look at your journaling and mood pattern</p>
+      <p style={styles.sub}>A quiet look at the pattern, not a scoreboard.</p>
 
       <div style={styles.statRow}>
         <div style={styles.statCard}>
           <BookOpen size={18} color={theme.purpleBright} />
-          <div style={{ ...styles.statNumber, ...theme.gradientText }}>{active.length}</div>
+          <div style={{ ...styles.statNumber, ...theme.gradientText }}><CountUpNumber value={active.length} /></div>
           <div style={styles.statLabel}>Journal entries</div>
         </div>
         <div style={styles.statCard}>
@@ -47,7 +70,7 @@ function InsightsView({ apiBase }) {
         </div>
         <div style={styles.statCard}>
           <Archive size={18} color={theme.rose} />
-          <div style={{ ...styles.statNumber, ...theme.gradientText }}>{archivedCount}</div>
+          <div style={{ ...styles.statNumber, ...theme.gradientText }}><CountUpNumber value={archivedCount} /></div>
           <div style={styles.statLabel}>Archived entries</div>
         </div>
       </div>

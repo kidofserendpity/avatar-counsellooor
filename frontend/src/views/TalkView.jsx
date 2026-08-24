@@ -157,7 +157,16 @@ function TalkView({
             <span style={styles.liveToggleLabel}>Live</span>
             <button
               style={{ ...styles.toggle, backgroundColor: liveMode ? theme.purple : "rgba(255,255,255,0.08)" }}
-              onClick={() => onToggleLive(!liveMode)}
+              onClick={() => {
+                  if (!liveMode) {
+                    // Called directly inside the tap, synchronously, so iOS Safari still
+                    // counts this as a user gesture and actually shows the mic prompt.
+                    // Going through state first (onToggleLive alone) loses that gesture
+                    // context by the time App.jsx's useEffect reacts to it.
+                    startRecording(true);
+                  }
+                  onToggleLive(!liveMode);
+              }}
             >
               <span style={{ ...styles.toggleDot, transform: liveMode ? "translateX(18px)" : "translateX(0)" }} />
             </button>

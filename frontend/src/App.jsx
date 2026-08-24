@@ -15,6 +15,7 @@ import HistoryView from "./views/HistoryView";
 import InsightsView from "./views/InsightsView";
 import SettingsView from "./views/SettingsView";
 import BreatheView from "./views/BreatheView";
+import Preloader from "./components/Preloader";
 import { theme } from "./theme";
 import { useIsMobile } from "./hooks/useIsMobile";
 import { refreshUserIdHeader, hasResolvedIdentity } from "./utils/userId";
@@ -143,6 +144,7 @@ function attachSpeechMonitor(stream, hasSpeechRef, options = {}) {
 function App() {
   const isMobile = useIsMobile();
   const [identityResolved, setIdentityResolved] = useState(() => hasResolvedIdentity());
+  const [booted, setBooted] = useState(false);
   const [onboardingDone, setOnboardingDone] = useState(() => {
     try {
       return localStorage.getItem(ONBOARDING_KEY) === "true";
@@ -179,6 +181,7 @@ function App() {
   });
 
   const mediaRecorderRef = useRef(null);
+  const startingRecordingRef = useRef(false);
   const audioChunksRef = useRef([]);
   const audioRef = useRef(null);
   const conversationRef = useRef(conversation);
@@ -428,12 +431,17 @@ function App() {
   };
 
   async function startRecording(live = false) {
+    if (startingRecordingRef.current) return;
+    if (mediaRecorderRef.current && mediaRecorderRef.current.state === "recording") return;
+    startingRecordingRef.current = true;
+
     const stream = await navigator.mediaDevices.getUserMedia({
       audio: { echoCancellation: true, noiseSuppression: true, autoGainControl: true }
     });
     mediaRecorderRef.current = new MediaRecorder(stream);
     audioChunksRef.current = [];
     hasSpeechRef.current = false;
+    startingRecordingRef.current = false;
 
     mediaRecorderRef.current.ondataavailable = (e) => {
       audioChunksRef.current.push(e.data);
@@ -545,7 +553,8 @@ function App() {
   };
 
   return (
-    <div style={styles.shell}>
+        <div style={styles.shell}>
+      {!booted && <Preloader onDone={() => setBooted(true)} />}
       {ambientBackground && (
         <>
           <div ref={auroraARef} style={styles.auroraA} />
@@ -596,7 +605,7 @@ const styles = {
     filter: "blur(80px)", opacity: 0.14,
     pointerEvents: "none", zIndex: 0
   },
-  main: { flex: 1, boxSizing: "border-box", minHeight: "100vh", overflowY: "auto", position: "relative", zIndex: 1 },
+  main: { flex: 1, boxSizing: "border-box", minHeight: "100vh", overflowY: "auto", position: "relative", zIndex: 1, display: "flex", justifyContent: "center" },
   cursorGlow: {
     position: "fixed", top: 0, left: 0, width: "600px", height: "600px", borderRadius: "50%",
     pointerEvents: "none", zIndex: 2, mixBlendMode: "screen",
