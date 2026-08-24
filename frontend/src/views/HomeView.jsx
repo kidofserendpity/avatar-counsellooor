@@ -1,4 +1,5 @@
 import { useEffect, useState } from "react";
+import { motion } from "motion/react";
 import axios from "axios";
 import { Mic, Wind, BookOpen, ArrowUpRight } from "lucide-react";
 import { theme } from "../theme";
@@ -51,20 +52,81 @@ function capitalize(str) {
   return str ? str.charAt(0).toUpperCase() + str.slice(1) : str;
 }
 
-const CARDS = [
-  { id: "breathe", label: "Breathe", sub: "A slow pace, for a minute", Icon: Wind, color: theme.teal, tint: "rgba(94,234,212,0.12)" },
-  { id: "journal", label: "Journal", sub: "Get it out of your head", Icon: BookOpen, color: theme.rose, tint: "rgba(201,107,122,0.14)" }
+// A small, dependency-free count-up, in the spirit of the animated stat
+// counters on the reference site, without pulling in a number-tweening lib.
+function useCountUp(target, duration = 900) {
+  const [value, setValue] = useState(0);
+  useEffect(() => {
+    let start;
+    let raf;
+    const step = (ts) => {
+      if (start === undefined) start = ts;
+      const progress = Math.min((ts - start) / duration, 1);
+      setValue(Math.round(progress * target));
+      if (progress < 1) raf = requestAnimationFrame(step);
+    };
+    raf = requestAnimationFrame(step);
+    return () => cancelAnimationFrame(raf);
+  }, [target, duration]);
+  return value;
+}
+
+// The three actions, in the numbered "01 //" list register the reference
+// site uses for its services and process steps, instead of boxed cards.
+const ACTIONS = [
+  { id: "talk", index: "01", label: "Talk", sub: "Real conversation, out loud or typed, whenever you want it", Icon: Mic, color: theme.purple, bright: theme.purpleBright },
+  { id: "breathe", index: "02", label: "Breathe", sub: "A slow pace, for a minute", Icon: Wind, color: theme.teal, bright: theme.teal },
+  { id: "journal", index: "03", label: "Journal", sub: "Get it out of your head", Icon: BookOpen, color: theme.rose, bright: theme.rose }
 ];
+
+const fadeUp = {
+  hidden: { opacity: 0, y: 18 },
+  visible: { opacity: 1, y: 0, transition: { duration: 0.55, ease: "easeOut" } }
+};
+
+function ActionRow({ id, index, label, sub, Icon, color, bright, onNavigate }) {
+  const [hovered, setHovered] = useState(false);
+  return (
+    <motion.button
+      variants={fadeUp}
+      style={styles.actionRow}
+      onMouseEnter={() => setHovered(true)}
+      onMouseLeave={() => setHovered(false)}
+      onClick={() => onNavigate(id)}
+    >
+      <motion.div
+        style={styles.actionAccent}
+        animate={{ backgroundColor: hovered ? bright : "transparent" }}
+        transition={{ duration: 0.25 }}
+      />
+      <span style={{ ...styles.actionIndex, color: hovered ? bright : theme.mutedDim }}>{index} //</span>
+      <div style={styles.actionIconWrap}>
+        <Icon size={18} color={hovered ? bright : theme.muted} />
+      </div>
+      <div style={styles.actionText}>
+        <motion.div
+          style={styles.actionLabel}
+          animate={{ x: hovered ? 6 : 0 }}
+          transition={{ type: "spring", stiffness: 260, damping: 22 }}
+        >
+          {label}
+        </motion.div>
+        <div style={styles.actionSub}>{sub}</div>
+      </div>
+      <motion.div
+        animate={{ x: hovered ? 4 : 0, opacity: hovered ? 1 : 0.4 }}
+        transition={{ type: "spring", stiffness: 260, damping: 22 }}
+      >
+        <ArrowUpRight size={20} color={color} />
+      </motion.div>
+    </motion.button>
+  );
+}
 
 function HomeView({ apiBase, onNavigate }) {
   const isMobile = useIsMobile();
   const [entries, setEntries] = useState([]);
   const [moodLog, setMoodLog] = useState([]);
-  const [hovered, setHovered] = useState(null);
-
-  // Captured once at mount, not called inline during render — the lint
-  // rule is right that Date.now() directly in the render body is unstable.
-  const [now] = useState(() => Date.now());
 
   useEffect(() => {
     axios.get(`${apiBase}/api/journal`)
@@ -77,8 +139,9 @@ function HomeView({ apiBase, onNavigate }) {
 
   const recent = entries.filter((e) => !e.archived).slice(-4).reverse();
   const nonArchivedCount = entries.filter((e) => !e.archived).length;
+  const countDisplay = useCountUp(nonArchivedCount);
 
-  const sevenDaysAgo = now - 7 * 24 * 60 * 60 * 1000;
+  const sevenDaysAgo = Date.now() - 7 * 24 * 60 * 60 * 1000;
   const recentMood = moodLog.filter((m) => m.timestamp >= sevenDaysAgo);
   let moodSnapshot = null;
   if (recentMood.length >= 3) {
@@ -91,147 +154,117 @@ function HomeView({ apiBase, onNavigate }) {
   const username = getUsername();
   const greetingText = username ? `${getGreeting()}, ${capitalize(username)}.` : `${getGreeting()}.`;
 
-  const cardStyle = (id, color) => ({
-    ...styles.smallCard,
-    borderColor: hovered === id ? color : theme.border,
-    boxShadow: hovered === id ? `0 0 0 1px ${color}, 0 0 26px 2px ${color}55` : "none",
-    transform: hovered === id ? "translateY(-2px)" : "translateY(0)"
-  });
-
   return (
-    <div style={styles.wrap}>
-      <div style={{ ...styles.headerRow, animation: "fadeUp 0.5s ease backwards" }}>
-        <div>
-          <h1 style={{ ...styles.greeting, ...theme.gradientText }}>{greetingText}</h1>
-          <p style={styles.sub}>Whatever's on your mind, there's room for it here.</p>
-        </div>
-      </div>
+    <motion.div
+      style={styles.wrap}
+      initial="hidden"
+      animate="visible"
+      variants={{ visible: { transition: { staggerChildren: 0.09 } } }}
+    >
+      <motion.div variants={fadeUp} style={styles.eyebrow}>A SPACE THAT'S ACTUALLY YOURS</motion.div>
+      <motion.h1 variants={fadeUp} style={{ ...styles.greeting, ...theme.gradientText }}>{greetingText}</motion.h1>
+      <motion.p variants={fadeUp} style={styles.sub}>Whatever's on your mind, there's room for it here.</motion.p>
 
-      <div style={{ ...styles.grid, ...(isMobile ? styles.gridMobile : {}) }}>
-        <button
-          style={{ ...styles.talkCard, ...cardStyle("talk", theme.purple), gridArea: isMobile ? "auto" : "talk", animation: "fadeUp 0.5s ease 0.05s backwards" }}
-          onMouseEnter={() => setHovered("talk")}
-          onMouseLeave={() => setHovered(null)}
-          onClick={() => onNavigate("talk")}
-        >
-          <div style={styles.talkTop}>
-            <div style={styles.talkIconWrap}><Mic size={26} color={theme.purpleBright} /></div>
-            <ArrowUpRight size={20} color={theme.mutedDim} />
-          </div>
-          <div>
-            <div style={styles.talkLabel}>Talk</div>
-            <div style={styles.talkSub}>Rant, text, vibe, talk with A.R.I.A, out loud or lowkey, whenever you want. </div>
-          </div>
-        </button>
+      <motion.div variants={fadeUp} style={styles.actionList}>
+        {ACTIONS.map((action) => (
+          <ActionRow key={action.id} {...action} onNavigate={onNavigate} />
+        ))}
+      </motion.div>
 
-        <div style={{ gridArea: isMobile ? "auto" : "pair", display: "flex", gap: "14px", animation: "fadeUp 0.5s ease 0.1s backwards" }}>
-          {CARDS.map(({ id, label, sub, Icon, color, tint }) => (
-            <button
-              key={id}
-              style={{ ...cardStyle(id, color), backgroundColor: tint, flex: 1 }}
-              onMouseEnter={() => setHovered(id)}
-              onMouseLeave={() => setHovered(null)}
-              onClick={() => onNavigate(id)}
-            >
-              <Icon size={20} color={color} />
-              <div>
-                <div style={styles.smallCardLabel}>{label}</div>
-                <div style={styles.smallCardSub}>{sub}</div>
-              </div>
-            </button>
-          ))}
-        </div>
-
-        <div style={{ ...styles.quoteCard, gridArea: isMobile ? "auto" : "quote", animation: "fadeUp 0.5s ease 0.15s backwards" }}>
-          <div style={styles.quoteEyebrow}>TODAY</div>
+      <div style={{ ...styles.band, ...(isMobile ? styles.bandMobile : {}) }}>
+        <motion.div variants={fadeUp} style={styles.quoteBlock}>
+          <div style={styles.eyebrowSmall}>TODAY</div>
           <p style={styles.quoteText}>{getDailyThought()}</p>
-        </div>
+        </motion.div>
 
-        <div style={{ ...styles.snapshotCard, gridArea: isMobile ? "auto" : "snapshot", animation: "fadeUp 0.5s ease 0.2s backwards" }}>
-          <div style={styles.snapshotStat}>
-            <div style={{ ...styles.snapshotNumber, ...theme.gradientText }}>{nonArchivedCount}</div>
-            <div style={styles.snapshotLabel}>{nonArchivedCount === 1 ? "journal entry" : "journal entries"}</div>
-          </div>
-          <div style={styles.snapshotDivider} />
-          <div style={styles.snapshotMoodText}>
+        <motion.div variants={fadeUp} style={styles.statBlock}>
+          <div style={{ ...styles.statNumber, ...theme.gradientText }}>{countDisplay}</div>
+          <div style={styles.statLabel}>{nonArchivedCount === 1 ? "journal entry" : "journal entries"}</div>
+          <div style={styles.statDivider} />
+          <div style={styles.statMoodText}>
             {moodSnapshot
               ? `Based on recent conversations, ${moodSnapshot}.`
               : "Talk with A.R.I.A a bit more this week and a mood snapshot will start showing up here."}
           </div>
-        </div>
-
-        <div style={{ ...styles.recentSection, gridArea: isMobile ? "auto" : "recent", animation: "fadeUp 0.5s ease 0.25s backwards" }}>
-          <div style={styles.sectionLabel}>RECENT JOURNAL ENTRIES</div>
-          {recent.length === 0 ? (
-            <p style={styles.emptyState}>Nothing here yet, your journal is one tab away whenever you want it.</p>
-          ) : (
-            <div style={styles.recentGrid}>
-              {recent.map((entry) => (
-                <div key={entry.id} style={styles.recentCard}>
-                  <div style={styles.recentText}>{entry.text.slice(0, 70)}{entry.text.length > 70 ? "…" : ""}</div>
-                  <div style={styles.recentDate}>{new Date(entry.timestamp).toLocaleDateString()}</div>
-                </div>
-              ))}
-            </div>
-          )}
-        </div>
+        </motion.div>
       </div>
-    </div>
+
+      <motion.div variants={fadeUp} style={styles.recentSection}>
+        <div style={styles.eyebrowSmall}>RECENT JOURNAL ENTRIES</div>
+        {recent.length === 0 ? (
+          <p style={styles.emptyState}>Nothing written yet — the Journal is one tab away whenever you want it.</p>
+        ) : (
+          <div style={styles.recentGrid}>
+            {recent.map((entry, i) => (
+              <div key={entry.id} style={styles.recentCard}>
+                <div style={styles.recentIndex}>{String(i + 1).padStart(2, "0")}</div>
+                <div style={styles.recentText}>{entry.text.slice(0, 70)}{entry.text.length > 70 ? "…" : ""}</div>
+                <div style={styles.recentDate}>{new Date(entry.timestamp).toLocaleDateString()}</div>
+              </div>
+            ))}
+          </div>
+        )}
+      </motion.div>
+    </motion.div>
   );
 }
 
 const styles = {
-  wrap: { maxWidth: "1040px", width: "100%", margin: "0 auto", boxSizing: "border-box" },
-  headerRow: { marginBottom: "28px" },
-  greeting: { fontFamily: theme.serif, fontWeight: 600, fontSize: "34px", margin: 0 },
-  sub: { color: theme.muted, fontSize: "14px", marginTop: "6px" },
-  grid: {
-    display: "grid",
-    gridTemplateColumns: "1.4fr 1fr",
-    gridTemplateAreas: `"talk quote" "pair quote" "snapshot snapshot" "recent recent"`,
-    gap: "14px"
+  wrap: { maxWidth: "980px", width: "100%", margin: "0 auto", boxSizing: "border-box" },
+  eyebrow: {
+    color: theme.mutedDim, fontSize: "11px", letterSpacing: "3px", fontWeight: 600,
+    marginBottom: "18px", textTransform: "uppercase"
   },
-  gridMobile: { display: "flex", flexDirection: "column", gridTemplateColumns: "none" },
-  talkCard: {
-    border: "1px solid", borderRadius: "20px", padding: "22px", cursor: "pointer",
-    backgroundColor: "rgba(155,107,255,0.1)", display: "flex", flexDirection: "column",
-    justifyContent: "space-between", textAlign: "left", minHeight: "150px", transition: "all 0.25s ease"
+  greeting: {
+    fontFamily: theme.serif, fontWeight: 600, fontSize: "clamp(38px, 5.4vw, 72px)",
+    lineHeight: 1.05, margin: 0
   },
-  talkTop: { display: "flex", justifyContent: "space-between", alignItems: "flex-start" },
-  talkIconWrap: { width: "46px", height: "46px", borderRadius: "14px", backgroundColor: "rgba(155,107,255,0.18)", display: "flex", alignItems: "center", justifyContent: "center" },
-  talkLabel: { color: theme.cream, fontSize: "19px", fontWeight: 700, marginTop: "18px" },
-  talkSub: { color: theme.muted, fontSize: "13px", marginTop: "4px", maxWidth: "320px" },
-  smallCard: {
-    border: "1px solid", borderRadius: "18px", padding: "16px", cursor: "pointer",
-    display: "flex", flexDirection: "column", gap: "20px", textAlign: "left", transition: "all 0.25s ease"
+  sub: { color: theme.muted, fontSize: "15px", marginTop: "14px", marginBottom: "40px" },
+
+  actionList: { display: "flex", flexDirection: "column", borderTop: `1px solid ${theme.border}`, marginBottom: "36px" },
+  actionRow: {
+    position: "relative", display: "flex", alignItems: "center", gap: "18px",
+    padding: "22px 6px", border: "none", borderBottom: `1px solid ${theme.border}`,
+    background: "transparent", cursor: "pointer", textAlign: "left", width: "100%", boxSizing: "border-box"
   },
-  smallCardLabel: { color: theme.cream, fontSize: "14px", fontWeight: 600 },
-  smallCardSub: { color: theme.mutedDim, fontSize: "11px", marginTop: "2px" },
-  quoteCard: {
-    border: `1px solid ${theme.border}`, borderRadius: "20px", padding: "24px",
+  actionAccent: { position: "absolute", left: 0, top: "14px", bottom: "14px", width: "2px", borderRadius: "2px" },
+  actionIndex: { fontFamily: "ui-monospace, Consolas, monospace", fontSize: "12px", letterSpacing: "1px", width: "44px", flexShrink: 0, transition: "color 0.25s ease" },
+  actionIconWrap: {
+    width: "38px", height: "38px", borderRadius: "50%", border: `1px solid ${theme.border}`,
+    display: "flex", alignItems: "center", justifyContent: "center", flexShrink: 0
+  },
+  actionText: { flex: 1, minWidth: 0 },
+  actionLabel: { color: theme.cream, fontSize: "20px", fontFamily: theme.serif, fontWeight: 600 },
+  actionSub: { color: theme.muted, fontSize: "13px", marginTop: "4px" },
+
+  band: { display: "grid", gridTemplateColumns: "1fr 1fr", gap: "14px", marginBottom: "40px" },
+  bandMobile: { gridTemplateColumns: "1fr" },
+  quoteBlock: {
+    border: `1px solid ${theme.border}`, borderRadius: "20px", padding: "26px",
     backgroundColor: theme.panel, backdropFilter: "blur(6px)", display: "flex",
-    flexDirection: "column", justifyContent: "center", minHeight: "100%", boxSizing: "border-box"
+    flexDirection: "column", justifyContent: "center", boxSizing: "border-box"
   },
-  quoteEyebrow: { color: theme.mutedDim, fontSize: "10px", letterSpacing: "2px", marginBottom: "12px" },
-  quoteText: { fontFamily: theme.serif, fontStyle: "italic", fontSize: "18px", color: theme.cream, lineHeight: 1.5, margin: 0 },
-  snapshotCard: {
-    border: `1px solid ${theme.border}`, borderRadius: "18px", padding: "20px 24px",
-    backgroundColor: theme.bgElevated, display: "flex", alignItems: "center", gap: "24px", flexWrap: "wrap"
+  eyebrowSmall: { color: theme.mutedDim, fontSize: "10.5px", letterSpacing: "2.5px", marginBottom: "12px", textTransform: "uppercase" },
+  quoteText: { fontFamily: theme.serif, fontStyle: "italic", fontSize: "19px", color: theme.cream, lineHeight: 1.5, margin: 0 },
+  statBlock: {
+    border: `1px solid ${theme.border}`, borderRadius: "20px", padding: "26px",
+    backgroundColor: theme.bgElevated, display: "flex", flexDirection: "column", boxSizing: "border-box"
   },
-  snapshotStat: { display: "flex", flexDirection: "column", alignItems: "flex-start", minWidth: "90px" },
-  snapshotNumber: { fontFamily: theme.serif, fontWeight: 700, fontSize: "30px", lineHeight: 1 },
-  snapshotLabel: { color: theme.mutedDim, fontSize: "11px", marginTop: "4px" },
-  snapshotDivider: { width: "1px", alignSelf: "stretch", backgroundColor: theme.border },
-  snapshotMoodText: { color: theme.muted, fontSize: "13px", lineHeight: 1.5, flex: 1, minWidth: "180px" },
+  statNumber: { fontFamily: theme.serif, fontWeight: 700, fontSize: "48px", lineHeight: 1 },
+  statLabel: { color: theme.mutedDim, fontSize: "11px", marginTop: "6px", letterSpacing: "0.5px" },
+  statDivider: { height: "1px", backgroundColor: theme.border, margin: "16px 0" },
+  statMoodText: { color: theme.muted, fontSize: "13px", lineHeight: 1.55 },
+
   recentSection: {},
-  sectionLabel: { color: theme.mutedDim, fontSize: "12px", letterSpacing: "1.5px", marginBottom: "12px" },
   emptyState: { color: theme.mutedDim, fontSize: "13px" },
   recentGrid: { display: "grid", gridTemplateColumns: "repeat(auto-fill, minmax(200px, 1fr))", gap: "10px" },
   recentCard: {
-    padding: "14px 16px", backgroundColor: theme.bgElevated, borderRadius: "12px", border: `1px solid ${theme.border}`
+    padding: "16px", backgroundColor: theme.bgElevated, borderRadius: "12px", border: `1px solid ${theme.border}`,
+    position: "relative"
   },
+  recentIndex: { color: theme.mutedDim, fontSize: "10px", fontFamily: "ui-monospace, Consolas, monospace", marginBottom: "8px" },
   recentText: { color: theme.cream, fontSize: "13px", lineHeight: 1.5 },
-  recentDate: { color: theme.mutedDim, fontSize: "11px", marginTop: "8px" }
+  recentDate: { color: theme.mutedDim, fontSize: "11px", marginTop: "10px" }
 };
 
 export default HomeView;
