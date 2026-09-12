@@ -34,6 +34,14 @@ const MOOD_LABELS = {
   angry: "there's been some real frustration this week"
 };
 
+const SENTIMENT_META = {
+  calm: { label: "Calm", color: theme.purple },
+  hopeful: { label: "Hopeful", color: theme.teal },
+  anxious: { label: "Anxious", color: "#c98a5a" },
+  sad: { label: "Sad", color: "#8a6a6a" },
+  angry: { label: "Angry", color: theme.rose }
+};
+
 function getDailyThought() {
   const start = new Date(new Date().getFullYear(), 0, 0);
   const dayOfYear = Math.floor((Date.now() - start) / 86400000);
@@ -51,10 +59,93 @@ function capitalize(str) {
   return str ? str.charAt(0).toUpperCase() + str.slice(1) : str;
 }
 
+function isToday(timestamp) {
+  const d = new Date(timestamp);
+  const now = new Date();
+  return d.toDateString() === now.toDateString();
+}
+
 const CARDS = [
   { id: "breathe", index: "02", label: "Breathe", sub: "A slow pace, for a minute", Icon: Wind, color: theme.teal, tint: "rgba(94,234,212,0.12)" },
   { id: "journal", index: "03", label: "Journal", sub: "Get it out of your head", Icon: BookOpen, color: theme.rose, tint: "rgba(201,107,122,0.14)" }
 ];
+
+function CheckInCard({ apiBase }) {
+  const [selfReportLog, setSelfReportLog] = useState([]);
+  const [loaded, setLoaded] = useState(false);
+  const [selected, setSelected] = useState(null);
+  const [note, setNote] = useState("");
+  const [saving, setSaving] = useState(false);
+  const [justSaved, setJustSaved] = useState(false);
+
+  const refresh = () => {
+    axios.get(`${apiBase}/api/mood-history`)
+      .then((res) => setSelfReportLog(res.data.selfReportLog || []))
+      .catch(() => setSelfReportLog([]))
+      .finally(() => setLoaded(true));
+  };
+
+  useEffect(() => { refresh(); }, [apiBase]);
+
+  const todayEntry = selfReportLog.length > 0 && isToday(selfReportLog[selfReportLog.length - 1].timestamp)
+    ? selfReportLog[selfReportLog.length - 1]
+    : null;
+
+  const submit = async () => {
+    if (!selected) return;
+    setSaving(true);
+    try {
+      await axios.post(`${apiBase}/api/self-report`, { sentiment: selected, note: note.trim() });
+      setNote("");
+      setJustSaved(true);
+      refresh();
+    } catch (err) {
+      console.error("Check-in save failed:", err);
+    } finally {
+      setSaving(false);
+    }
+  };
+
+  if (!loaded) return null;
+
+  return (
+    <div style={styles.checkInCard}>
+      <div style={styles.checkInHeader}>How are you, really?</div>
+      {todayEntry && !justSaved ? (
+        <p style={styles.checkInPast}>
+          You checked in as <strong style={{ color: SENTIMENT_META[todayEntry.sentiment]?.color }}>{SENTIMENT_META[todayEntry.sentiment]?.label}</strong> today{todayEntry.note ? `, and said: "${todayEntry.note}"` : ""}. Things shift, update it below if that's changed.
+        </p>
+      ) : (
+        <p style={styles.checkInSub}>In your own words, not a guess from anything you said elsewhere.</p>
+      )}
+      <div style={styles.tagRow}>
+        {Object.entries(SENTIMENT_META).map(([key, meta]) => (
+          <button
+            key={key}
+            style={{
+              ...styles.tagButton,
+              borderColor: selected === key ? meta.color : theme.border,
+              color: selected === key ? meta.color : theme.muted,
+              backgroundColor: selected === key ? `${meta.color}22` : "transparent"
+            }}
+            onClick={() => { setSelected(key); setJustSaved(false); }}
+          >
+            {meta.label}
+          </button>
+        ))}
+      </div>
+      <input
+        style={styles.checkInInput}
+        value={note}
+        onChange={(e) => { setNote(e.target.value); setJustSaved(false); }}
+        placeholder="Want to add anything? (optional)"
+      />
+      <button style={styles.checkInSubmit} onClick={submit} disabled={!selected || saving}>
+        {saving ? "Saving…" : todayEntry ? "Update check-in" : "Check in"}
+      </button>
+    </div>
+  );
+}
 
 function HomeView({ apiBase, onNavigate }) {
   const isMobile = useIsMobile();
@@ -148,6 +239,10 @@ function HomeView({ apiBase, onNavigate }) {
           <p style={styles.quoteText}>{getDailyThought()}</p>
         </div>
 
+        <div style={{ gridArea: isMobile ? "auto" : "checkin", animation: "fadeUp 0.5s ease 0.18s backwards" }}>
+          <CheckInCard apiBase={apiBase} />
+        </div>
+
         <div style={{ ...styles.snapshotCard, gridArea: isMobile ? "auto" : "snapshot", animation: "fadeUp 0.5s ease 0.2s backwards" }}>
           <div style={styles.snapshotStat}>
             <div style={{ ...styles.snapshotNumber, ...theme.gradientText }}>{nonArchivedCount}</div>
@@ -189,7 +284,7 @@ const styles = {
   grid: {
     display: "grid",
     gridTemplateColumns: "1.4fr 1fr",
-    gridTemplateAreas: `"talk quote" "pair quote" "snapshot snapshot" "recent recent"`,
+    gridTemplateAreas: `"talk quote" "pair quote" "checkin checkin" "snapshot snapshot" "recent recent"`,
     gap: "14px"
   },
   gridMobile: { display: "flex", flexDirection: "column", gridTemplateColumns: "none" },
@@ -218,6 +313,27 @@ const styles = {
   },
   quoteEyebrow: { color: theme.mutedDim, fontSize: "10px", letterSpacing: "2px", marginBottom: "12px" },
   quoteText: { fontFamily: theme.serif, fontStyle: "italic", fontSize: "18px", color: theme.cream, lineHeight: 1.5, margin: 0 },
+  checkInCard: {
+    border: `1px solid ${theme.border}`, borderRadius: "18px", padding: "18px 20px",
+    backgroundColor: theme.bgElevated, display: "flex", flexDirection: "column", gap: "10px"
+  },
+  checkInHeader: { fontFamily: theme.serif, fontSize: "16px", color: theme.cream },
+  checkInSub: { color: theme.mutedDim, fontSize: "12px" },
+  checkInPast: { color: theme.muted, fontSize: "12px", lineHeight: 1.5 },
+  tagRow: { display: "flex", gap: "8px", flexWrap: "wrap" },
+  tagButton: {
+    padding: "7px 14px", borderRadius: "999px", border: "1px solid", fontSize: "12px",
+    cursor: "pointer", transition: "all 0.15s ease"
+  },
+  checkInInput: {
+    padding: "9px 12px", borderRadius: "10px", border: `1px solid ${theme.border}`,
+    backgroundColor: theme.bg, color: theme.cream, fontSize: "13px", outline: "none"
+  },
+  checkInSubmit: {
+    alignSelf: "flex-start", padding: "8px 18px", borderRadius: "10px", border: "none",
+    background: `linear-gradient(135deg, ${theme.purple}, ${theme.teal})`,
+    color: "#120e1c", fontWeight: 600, fontSize: "13px", cursor: "pointer"
+  },
   snapshotCard: {
     border: `1px solid ${theme.border}`, borderRadius: "18px", padding: "20px 24px",
     backgroundColor: theme.bgElevated, display: "flex", alignItems: "center", gap: "24px", flexWrap: "wrap"

@@ -25,6 +25,7 @@ function defaultMemory() {
     lastTopic: null,
     crisisFlag: null,
     moodLog: [],
+    selfReportLog: [],
     styleProfile: {
       totalMessages: 0,
       length: { short: 0, medium: 0, long: 0 },
@@ -91,6 +92,12 @@ function consumeCrisisCheckIn(memory) {
 function addMoodEntry(memory, sentiment) {
   const moodLog = [...memory.moodLog, { sentiment, timestamp: Date.now() }].slice(-MAX_MOOD_LOG);
   return { ...memory, moodLog };
+}
+
+function addSelfReport(memory, sentiment, note) {
+  const entry = { sentiment, note: note ? note.trim().slice(0, 300) : '', timestamp: Date.now() };
+  const selfReportLog = [...(memory.selfReportLog || []), entry].slice(-MAX_MOOD_LOG);
+  return { ...memory, selfReportLog };
 }
 
 function getMoodTrendLine(memory) {
@@ -190,6 +197,7 @@ module.exports = {
   addFact,
   addVisualFact,
   addMoodEntry,
+  addSelfReport,
   updateStyle,
   setCrisisFlag,
   consumeCrisisCheckIn,

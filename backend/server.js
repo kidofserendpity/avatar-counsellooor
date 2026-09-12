@@ -31,6 +31,7 @@ const {
   addFact,
   addVisualFact,
   addMoodEntry,
+  addSelfReport,
   updateStyle,
   setCrisisFlag,
   consumeCrisisCheckIn,
@@ -145,7 +146,31 @@ app.post('/api/onboarding', (req, res) => {
 app.get('/api/mood-history', (req, res) => {
   const userId = getUserId(req);
   const memory = loadMemory(userId);
-  res.json({ moodLog: memory.moodLog });
+  res.json({ moodLog: memory.moodLog, selfReportLog: memory.selfReportLog || [] });
+});
+
+app.post('/api/self-report', (req, res) => {
+  try {
+    const userId = getUserId(req);
+    const { sentiment, note } = req.body;
+    const validSentiments = ['calm', 'anxious', 'sad', 'hopeful', 'angry'];
+    if (!validSentiments.includes(sentiment)) {
+      return res.status(400).json({ error: 'A valid sentiment is required' });
+    }
+    const memory = loadMemory(userId);
+    const updated = addSelfReport(memory, sentiment, note);
+    saveMemory(userId, updated);
+    res.json({ success: true });
+  } catch (error) {
+    console.error('Self-report save error:', error.message);
+    res.status(500).json({ error: 'Could not save check-in' });
+  }
+});
+
+app.get('/api/adaptation', (req, res) => {
+  const userId = getUserId(req);
+  const memory = loadMemory(userId);
+  res.json({ styleProfile: memory.styleProfile });
 });
 
 app.get('/api/conversation', (req, res) => {
