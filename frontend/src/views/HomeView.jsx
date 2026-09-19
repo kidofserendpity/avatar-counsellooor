@@ -1,6 +1,6 @@
-import { useEffect, useState } from "react";
+import { useEffect, useState, useCallback } from "react";
 import axios from "axios";
-import { Mic, Wind, BookOpen, ArrowUpRight } from "lucide-react";
+import { Mic, Wind, BookOpen, ArrowUpRight, X } from "lucide-react";
 import { theme } from "../theme";
 import { useIsMobile } from "../hooks/useIsMobile";
 import { getUsername } from "../utils/userId";
@@ -26,6 +26,16 @@ const DAILY_THOUGHTS = [
   "You're allowed to be a work in progress, out loud."
 ];
 
+const DAILY_INVITES = [
+  "No pressure today, this is just here whenever you want it.",
+  "Haven't heard from you yet today. Whenever works.",
+  "This space is still here if you want a few minutes to yourself.",
+  "Come sit for a bit, or don't, no scorekeeping either way.",
+  "Whenever you're ready today, or not at all, that's fine too."
+];
+
+const LAST_VISIT_KEY = "aria-last-visit-date";
+
 const MOOD_LABELS = {
   calm: "you've been feeling pretty steady",
   hopeful: "there's been a hopeful thread running through it",
@@ -41,6 +51,12 @@ const SENTIMENT_META = {
   sad: { label: "Sad", color: "#8a6a6a" },
   angry: { label: "Angry", color: theme.rose }
 };
+
+function getEntrySentiments(entry) {
+  if (Array.isArray(entry.sentiments)) return entry.sentiments;
+  if (entry.sentiment) return [entry.sentiment];
+  return [];
+}
 
 function getDailyThought() {
   const start = new Date(new Date().getFullYear(), 0, 0);
@@ -65,40 +81,81 @@ function isToday(timestamp) {
   return d.toDateString() === now.toDateString();
 }
 
+// The invite text is decided once, during the component's first render,
+// via the lazy initializer, a pure read of localStorage plus a pick.
+// The effect below only performs the actual side effect, recording that
+// today's visit has been seen, which is a plain external write, not a
+// setState call, so there's nothing for the lint rule to flag here.
+function useDailyInvite() {
+  const [invite] = useState(() => {
+    try {
+      const today = new Date().toDateString();
+      const lastVisit = localStorage.getItem(LAST_VISIT_KEY);
+      if (lastVisit !== today) {
+        return DAILY_INVITES[Math.floor(Math.random() * DAILY_INVITES.length)];
+      }
+    } catch {
+      // ignore, just skip the invite this time
+    }
+    return null;
+  });
+  const [dismissed, setDismissed] = useState(false);
+
+  useEffect(() => {
+    if (!invite) return;
+    try {
+      localStorage.setItem(LAST_VISIT_KEY, new Date().toDateString());
+    } catch {
+      // ignore
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
+
+  return [dismissed ? null : invite, () => setDismissed(true)];
+}
+
 const CARDS = [
   { id: "breathe", index: "02", label: "Breathe", sub: "A slow pace, for a minute", Icon: Wind, color: theme.teal, tint: "rgba(94,234,212,0.12)" },
   { id: "journal", index: "03", label: "Journal", sub: "Get it out of your head", Icon: BookOpen, color: theme.rose, tint: "rgba(201,107,122,0.14)" }
 ];
 
-function CheckInCard({ apiBase }) {
+function CheckInCard({ apiBase, onSaved }) {
   const [selfReportLog, setSelfReportLog] = useState([]);
   const [loaded, setLoaded] = useState(false);
-  const [selected, setSelected] = useState(null);
+  const [selectedTags, setSelectedTags] = useState([]);
   const [note, setNote] = useState("");
   const [saving, setSaving] = useState(false);
   const [justSaved, setJustSaved] = useState(false);
 
-  const refresh = () => {
+  const refresh = useCallback(() => {
     axios.get(`${apiBase}/api/mood-history`)
       .then((res) => setSelfReportLog(res.data.selfReportLog || []))
       .catch(() => setSelfReportLog([]))
       .finally(() => setLoaded(true));
-  };
+  }, [apiBase]);
 
-  useEffect(() => { refresh(); }, [apiBase]);
+  useEffect(() => { refresh(); }, [refresh]);
 
   const todayEntry = selfReportLog.length > 0 && isToday(selfReportLog[selfReportLog.length - 1].timestamp)
     ? selfReportLog[selfReportLog.length - 1]
     : null;
+  const todayTags = todayEntry ? getEntrySentiments(todayEntry) : [];
+
+  const toggleTag = (key) => {
+    setJustSaved(false);
+    setSelectedTags((prev) => (prev.includes(key) ? prev.filter((t) => t !== key) : [...prev, key]));
+  };
 
   const submit = async () => {
-    if (!selected) return;
+    if (selectedTags.length === 0) return;
     setSaving(true);
     try {
-      await axios.post(`${apiBase}/api/self-report`, { sentiment: selected, note: note.trim() });
+      await axios.post(`${apiBase}/api/self-report`, { sentiments: selectedTags, note: note.trim() });
+      setSelectedTags([]);
       setNote("");
       setJustSaved(true);
       refresh();
+      if (onSaved) onSaved();
     } catch (err) {
       console.error("Check-in save failed:", err);
     } finally {
@@ -113,10 +170,10 @@ function CheckInCard({ apiBase }) {
       <div style={styles.checkInHeader}>How are you, really?</div>
       {todayEntry && !justSaved ? (
         <p style={styles.checkInPast}>
-          You checked in as <strong style={{ color: SENTIMENT_META[todayEntry.sentiment]?.color }}>{SENTIMENT_META[todayEntry.sentiment]?.label}</strong> today{todayEntry.note ? `, and said: "${todayEntry.note}"` : ""}. Things shift, update it below if that's changed.
+          You checked in as <strong>{todayTags.map((t) => SENTIMENT_META[t]?.label).filter(Boolean).join(", ")}</strong> today{todayEntry.note ? `, and said: "${todayEntry.note}"` : ""}. Things shift, update it below if that's changed.
         </p>
       ) : (
-        <p style={styles.checkInSub}>In your own words, not a guess from anything you said elsewhere.</p>
+        <p style={styles.checkInSub}>In your own words, not a guess from anything you said elsewhere. Pick as many as fit.</p>
       )}
       <div style={styles.tagRow}>
         {Object.entries(SENTIMENT_META).map(([key, meta]) => (
@@ -124,11 +181,11 @@ function CheckInCard({ apiBase }) {
             key={key}
             style={{
               ...styles.tagButton,
-              borderColor: selected === key ? meta.color : theme.border,
-              color: selected === key ? meta.color : theme.muted,
-              backgroundColor: selected === key ? `${meta.color}22` : "transparent"
+              borderColor: selectedTags.includes(key) ? meta.color : theme.border,
+              color: selectedTags.includes(key) ? meta.color : theme.muted,
+              backgroundColor: selectedTags.includes(key) ? `${meta.color}22` : "transparent"
             }}
-            onClick={() => { setSelected(key); setJustSaved(false); }}
+            onClick={() => toggleTag(key)}
           >
             {meta.label}
           </button>
@@ -140,7 +197,7 @@ function CheckInCard({ apiBase }) {
         onChange={(e) => { setNote(e.target.value); setJustSaved(false); }}
         placeholder="Want to add anything? (optional)"
       />
-      <button style={styles.checkInSubmit} onClick={submit} disabled={!selected || saving}>
+      <button style={styles.checkInSubmit} onClick={submit} disabled={selectedTags.length === 0 || saving}>
         {saving ? "Saving…" : todayEntry ? "Update check-in" : "Check in"}
       </button>
     </div>
@@ -151,25 +208,50 @@ function HomeView({ apiBase, onNavigate }) {
   const isMobile = useIsMobile();
   const [entries, setEntries] = useState([]);
   const [moodLog, setMoodLog] = useState([]);
+  const [selfReportLog, setSelfReportLog] = useState([]);
   const [hovered, setHovered] = useState(null);
   const [now] = useState(() => Date.now());
+  const [invite, dismissInvite] = useDailyInvite();
+
+  const refreshSnapshotData = () => {
+    axios.get(`${apiBase}/api/mood-history`)
+      .then((res) => {
+        setMoodLog(res.data.moodLog || []);
+        setSelfReportLog(res.data.selfReportLog || []);
+      })
+      .catch(() => {});
+  };
 
   useEffect(() => {
     axios.get(`${apiBase}/api/journal`)
       .then((res) => setEntries(res.data.entries || []))
       .catch(() => setEntries([]));
-    axios.get(`${apiBase}/api/mood-history`)
-      .then((res) => setMoodLog(res.data.moodLog || []))
-      .catch(() => setMoodLog([]));
+    refreshSnapshotData();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [apiBase]);
 
   const recent = entries.filter((e) => !e.archived).slice(-4).reverse();
   const nonArchivedCount = entries.filter((e) => !e.archived).length;
 
   const sevenDaysAgo = now - 7 * 24 * 60 * 60 * 1000;
+  const recentSelfReports = selfReportLog.filter((m) => m.timestamp >= sevenDaysAgo);
   const recentMood = moodLog.filter((m) => m.timestamp >= sevenDaysAgo);
+
   let moodSnapshot = null;
-  if (recentMood.length >= 3) {
+  let snapshotIsSelf = false;
+
+  if (recentSelfReports.length >= 1) {
+    const counts = {};
+    recentSelfReports.forEach((entry) => {
+      getEntrySentiments(entry).forEach((s) => { counts[s] = (counts[s] || 0) + 1; });
+    });
+    const dominant = Object.entries(counts).sort((a, b) => b[1] - a[1])[0]?.[0];
+    if (dominant && MOOD_LABELS[dominant]) {
+      moodSnapshot = MOOD_LABELS[dominant];
+      snapshotIsSelf = true;
+    }
+  }
+  if (!moodSnapshot && recentMood.length >= 3) {
     const counts = {};
     recentMood.forEach((m) => { counts[m.sentiment] = (counts[m.sentiment] || 0) + 1; });
     const dominant = Object.entries(counts).sort((a, b) => b[1] - a[1])[0][0];
@@ -188,6 +270,13 @@ function HomeView({ apiBase, onNavigate }) {
 
   return (
     <div style={styles.wrap}>
+      {invite && (
+        <div style={{ ...styles.inviteBanner, animation: "fadeUp 0.4s ease backwards" }}>
+          <span style={styles.inviteText}>{invite}</span>
+          <button style={styles.inviteDismiss} onClick={dismissInvite}><X size={13} /></button>
+        </div>
+      )}
+
       <div style={{ ...styles.headerRow, animation: "fadeUp 0.5s ease backwards" }}>
         <div>
           <h1 style={{ ...styles.greeting, ...theme.gradientText }}>{greetingText}</h1>
@@ -240,7 +329,7 @@ function HomeView({ apiBase, onNavigate }) {
         </div>
 
         <div style={{ gridArea: isMobile ? "auto" : "checkin", animation: "fadeUp 0.5s ease 0.18s backwards" }}>
-          <CheckInCard apiBase={apiBase} />
+          <CheckInCard apiBase={apiBase} onSaved={refreshSnapshotData} />
         </div>
 
         <div style={{ ...styles.snapshotCard, gridArea: isMobile ? "auto" : "snapshot", animation: "fadeUp 0.5s ease 0.2s backwards" }}>
@@ -251,8 +340,10 @@ function HomeView({ apiBase, onNavigate }) {
           <div style={styles.snapshotDivider} />
           <div style={styles.snapshotMoodText}>
             {moodSnapshot
-              ? `Based on recent conversations, ${moodSnapshot}.`
-              : "Talk with A.R.I.A a bit more this week and a mood snapshot will start showing up here."}
+              ? snapshotIsSelf
+                ? `Based on what you've told A.R.I.A directly, ${moodSnapshot}.`
+                : `Based on recent conversations, ${moodSnapshot}.`
+              : "Talk with A.R.I.A a bit, or check in above, and a mood snapshot will start showing up here."}
           </div>
         </div>
 
@@ -278,6 +369,13 @@ function HomeView({ apiBase, onNavigate }) {
 
 const styles = {
   wrap: { maxWidth: "980px", width: "100%", boxSizing: "border-box" },
+  inviteBanner: {
+    display: "flex", alignItems: "center", justifyContent: "space-between", gap: "10px",
+    padding: "10px 16px", borderRadius: "12px", backgroundColor: theme.panel,
+    border: `1px solid ${theme.border}`, marginBottom: "18px"
+  },
+  inviteText: { color: theme.muted, fontSize: "13px" },
+  inviteDismiss: { background: "transparent", border: "none", color: theme.mutedDim, cursor: "pointer", display: "flex", flexShrink: 0 },
   headerRow: { marginBottom: "28px" },
   greeting: { fontFamily: theme.serif, fontWeight: 600, fontSize: "34px", margin: 0 },
   sub: { color: theme.muted, fontSize: "14px", marginTop: "6px" },

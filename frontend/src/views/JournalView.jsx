@@ -1,7 +1,7 @@
 import { useEffect, useState, useCallback, useRef } from "react";
-import { motion, AnimatePresence } from "motion/react";
 import axios from "axios";
-import { Lightbulb, Heart, Flame, Target, Moon, Image, CloudRain, FileText, Archive, ArchiveRestore, Trash2, ChevronDown, Check, Sparkles } from "lucide-react";
+import { motion, AnimatePresence } from "motion/react";
+import { Lightbulb, Heart, Flame, Target, Moon, Image, CloudRain, FileText, Archive, ArchiveRestore, Trash2, ChevronDown, Check, Sparkles, Mic, Square } from "lucide-react";
 import { theme } from "../theme";
 
 const CATEGORY_META = {
@@ -24,7 +24,7 @@ const WRITING_PROMPTS = [
   "What's a conversation you wish you could have again?",
   "What's something you're proud of that nobody noticed?",
   "Write to someone you haven't said something to yet.",
-  "What's weighing on you that you haven't put into words?",
+  "What's something weighing on you that you haven't put into words?",
   "Describe how you actually feel right now, not how you're supposed to feel.",
   "What's something small that went right today?",
   "What do you wish someone had asked you today?",
@@ -34,10 +34,24 @@ const WRITING_PROMPTS = [
   "What's something you needed to hear today?"
 ];
 
-const fadeUp = {
-  hidden: { opacity: 0, y: 14 },
-  visible: { opacity: 1, y: 0, transition: { duration: 0.45, ease: "easeOut" } }
-};
+const HALLUCINATION_PATTERNS = [
+  /^you\.?$/i,
+  /^bye\.?$/i,
+  /^thank you\.?$/i,
+  /^thanks for watching\.?!?$/i,
+  /^thank you for watching\.?!?$/i,
+  /^please subscribe\.?!?$/i,
+  /^see you next time\.?!?$/i,
+  /^\W*$/
+];
+
+function isLikelyHallucination(text) {
+  const trimmed = text.trim();
+  if (trimmed.length === 0) return true;
+  const wordCount = trimmed.split(/\s+/).length;
+  if (wordCount > 4) return false;
+  return HALLUCINATION_PATTERNS.some((pattern) => pattern.test(trimmed));
+}
 
 function CategoryDropdown({ value, onChange, includeAll }) {
   const [open, setOpen] = useState(false);
@@ -55,91 +69,34 @@ function CategoryDropdown({ value, onChange, includeAll }) {
         <span>{current.label}</span>
         <ChevronDown size={14} color={theme.mutedDim} style={{ marginLeft: "4px", transform: open ? "rotate(180deg)" : "none", transition: "transform 0.15s ease" }} />
       </button>
-      <AnimatePresence>
-        {open && (
-          <>
-            <div style={styles.dropdownBackdrop} onClick={() => setOpen(false)} />
-            <motion.div
-              style={styles.dropdownPanel}
-              initial={{ opacity: 0, y: -6, scale: 0.98 }}
-              animate={{ opacity: 1, y: 0, scale: 1 }}
-              exit={{ opacity: 0, y: -6, scale: 0.98 }}
-              transition={{ duration: 0.15, ease: "easeOut" }}
-            >
-              {includeAll && (
-                <button
-                  style={{ ...styles.dropdownOption, ...(value === "all" ? styles.dropdownOptionActive : {}) }}
-                  onClick={() => { onChange("all"); setOpen(false); }}
-                >
-                  <span style={styles.dropdownOptionLabel}>All categories</span>
-                  {value === "all" && <Check size={14} color={theme.purpleBright} />}
-                </button>
-              )}
-              {Object.entries(CATEGORY_META).map(([key, meta]) => (
-                <button
-                  key={key}
-                  style={{ ...styles.dropdownOption, ...(value === key ? styles.dropdownOptionActive : {}) }}
-                  onClick={() => { onChange(key); setOpen(false); }}
-                >
-                  <meta.Icon size={14} color={meta.color} />
-                  <span style={styles.dropdownOptionLabel}>{meta.label}</span>
-                  {value === key && <Check size={14} color={theme.purpleBright} />}
-                </button>
-              ))}
-            </motion.div>
-          </>
-        )}
-      </AnimatePresence>
+      {open && (
+        <>
+          <div style={styles.dropdownBackdrop} onClick={() => setOpen(false)} />
+          <div style={styles.dropdownPanel}>
+            {includeAll && (
+              <button
+                style={{ ...styles.dropdownOption, ...(value === "all" ? styles.dropdownOptionActive : {}) }}
+                onClick={() => { onChange("all"); setOpen(false); }}
+              >
+                <span style={styles.dropdownOptionLabel}>All categories</span>
+                {value === "all" && <Check size={14} color={theme.purpleBright} />}
+              </button>
+            )}
+            {Object.entries(CATEGORY_META).map(([key, meta]) => (
+              <button
+                key={key}
+                style={{ ...styles.dropdownOption, ...(value === key ? styles.dropdownOptionActive : {}) }}
+                onClick={() => { onChange(key); setOpen(false); }}
+              >
+                <meta.Icon size={14} color={meta.color} />
+                <span style={styles.dropdownOptionLabel}>{meta.label}</span>
+                {value === key && <Check size={14} color={theme.purpleBright} />}
+              </button>
+            ))}
+          </div>
+        </>
+      )}
     </div>
-  );
-}
-
-function EntryCard({ entry, onToggleArchive, onDelete }) {
-  const [hovered, setHovered] = useState(false);
-  const meta = CATEGORY_META[entry.category] || CATEGORY_META.other;
-  const CategoryIcon = meta.Icon;
-
-  return (
-    <motion.div
-      variants={fadeUp}
-      style={styles.entryCard}
-      onMouseEnter={() => setHovered(true)}
-      onMouseLeave={() => setHovered(false)}
-      animate={{ y: hovered ? -2 : 0, borderColor: hovered ? meta.color : theme.border }}
-      transition={{ duration: 0.2, ease: "easeOut" }}
-    >
-      <div style={styles.entryHeader}>
-        <div style={{ ...styles.categoryChip, color: meta.color, borderColor: meta.color }}>
-          <CategoryIcon size={12} />
-          {meta.label}
-        </div>
-        <div style={styles.entryActions}>
-          <motion.button
-            style={styles.iconButton}
-            whileHover={{ scale: 1.12, color: theme.cream }}
-            whileTap={{ scale: 0.94 }}
-            onClick={() => onToggleArchive(entry.id, entry.archived)}
-            title={entry.archived ? "Unarchive" : "Archive"}
-          >
-            {entry.archived ? <ArchiveRestore size={15} /> : <Archive size={15} />}
-          </motion.button>
-          <motion.button
-            style={styles.iconButton}
-            whileHover={{ scale: 1.12, color: theme.crisis }}
-            whileTap={{ scale: 0.94 }}
-            onClick={() => onDelete(entry.id)}
-            title="Delete"
-          >
-            <Trash2 size={15} />
-          </motion.button>
-        </div>
-      </div>
-      <div style={styles.entryDate}>
-        {new Date(entry.timestamp).toLocaleDateString(undefined, { weekday: "short", month: "short", day: "numeric" })}
-      </div>
-      {entry.subject && <div style={styles.entrySubject}>{entry.subject}</div>}
-      <p style={styles.entryText}>{entry.text}</p>
-    </motion.div>
   );
 }
 
@@ -153,6 +110,13 @@ function JournalView({ apiBase }) {
   const [categoryFilter, setCategoryFilter] = useState("all");
   const [showArchived, setShowArchived] = useState(false);
   const [activePrompt, setActivePrompt] = useState(null);
+  const [recording, setRecording] = useState(false);
+  const [transcribing, setTranscribing] = useState(false);
+
+  const mediaRecorderRef = useRef(null);
+  const audioChunksRef = useRef([]);
+  const hasSpeechRef = useRef(false);
+  const speechCleanupRef = useRef(null);
 
   const loadEntries = useCallback(() => {
     axios.get(`${apiBase}/api/journal`)
@@ -166,6 +130,78 @@ function JournalView({ apiBase }) {
   const showRandomPrompt = () => {
     const random = WRITING_PROMPTS[Math.floor(Math.random() * WRITING_PROMPTS.length)];
     setActivePrompt(random);
+  };
+
+  const startVoiceEntry = async () => {
+    const stream = await navigator.mediaDevices.getUserMedia({
+      audio: { echoCancellation: true, noiseSuppression: true, autoGainControl: true }
+    });
+    mediaRecorderRef.current = new MediaRecorder(stream);
+    audioChunksRef.current = [];
+    hasSpeechRef.current = false;
+
+    const AudioCtx = window.AudioContext || window.webkitAudioContext;
+    const audioContext = new AudioCtx();
+    const source = audioContext.createMediaStreamSource(stream);
+    const analyser = audioContext.createAnalyser();
+    analyser.fftSize = 2048;
+    source.connect(analyser);
+    const data = new Uint8Array(analyser.fftSize);
+    let raf;
+    const check = () => {
+      analyser.getByteTimeDomainData(data);
+      let sumSquares = 0;
+      for (let i = 0; i < data.length; i++) {
+        const normalized = (data[i] - 128) / 128;
+        sumSquares += normalized * normalized;
+      }
+      const rms = Math.sqrt(sumSquares / data.length);
+      if (rms >= 0.02) hasSpeechRef.current = true;
+      raf = requestAnimationFrame(check);
+    };
+    raf = requestAnimationFrame(check);
+    speechCleanupRef.current = () => {
+      cancelAnimationFrame(raf);
+      audioContext.close().catch(() => {});
+    };
+
+    mediaRecorderRef.current.ondataavailable = (e) => {
+      audioChunksRef.current.push(e.data);
+    };
+
+    mediaRecorderRef.current.onstop = async () => {
+      if (speechCleanupRef.current) {
+        speechCleanupRef.current();
+        speechCleanupRef.current = null;
+      }
+      if (!hasSpeechRef.current) return;
+
+      const audioBlob = new Blob(audioChunksRef.current, { type: "audio/webm" });
+      const formData = new FormData();
+      formData.append("audio", audioBlob, "recording.webm");
+      try {
+        setTranscribing(true);
+        const res = await axios.post(`${apiBase}/api/transcribe`, formData);
+        const transcript = res.data.transcript;
+        if (transcript && transcript.trim() && !isLikelyHallucination(transcript)) {
+          setDraft((prev) => (prev.trim() ? `${prev.trim()} ${transcript.trim()}` : transcript.trim()));
+        }
+      } catch (err) {
+        console.error("Journal voice transcription failed:", err);
+      } finally {
+        setTranscribing(false);
+      }
+    };
+
+    mediaRecorderRef.current.start();
+    setRecording(true);
+  };
+
+  const stopVoiceEntry = () => {
+    if (mediaRecorderRef.current && mediaRecorderRef.current.state !== "inactive") {
+      mediaRecorderRef.current.stop();
+    }
+    setRecording(false);
   };
 
   const saveEntry = async () => {
@@ -211,74 +247,62 @@ function JournalView({ apiBase }) {
     .reverse();
 
   return (
-    <motion.div
-      style={styles.wrap}
-      initial="hidden"
-      animate="visible"
-      variants={{ visible: { transition: { staggerChildren: 0.07 } } }}
-    >
+    <div style={styles.wrap}>
       <div style={styles.layout}>
-        <motion.div variants={fadeUp} style={styles.composerColumn}>
+        <div style={styles.composerColumn}>
           <h1 style={styles.title}>Journal</h1>
           <p style={styles.sub}>
-            Private writing space. A.R.I.A can talk with you about anything here if you bring it up — she won't raise it on her own.
+            Private writing space. A.R.I.A can talk with you about anything here if you bring it up, she won't raise it on her own.
           </p>
 
-          <AnimatePresence>
-            {activePrompt && (
-              <motion.div
-                style={styles.promptBox}
-                initial={{ opacity: 0, y: -6, height: 0 }}
-                animate={{ opacity: 1, y: 0, height: "auto" }}
-                exit={{ opacity: 0, y: -6, height: 0 }}
-                transition={{ duration: 0.2, ease: "easeOut" }}
-              >
-                <Sparkles size={14} color={theme.purpleBright} />
-                <span style={styles.promptText}>{activePrompt}</span>
-              </motion.div>
-            )}
-          </AnimatePresence>
+          {activePrompt && (
+            <div style={styles.promptBox}>
+              <Sparkles size={14} color={theme.purpleBright} />
+              <span style={styles.promptText}>{activePrompt}</span>
+            </div>
+          )}
 
           <div style={styles.composer}>
-            <input
-              style={styles.subjectInput}
-              value={subject}
-              onChange={(e) => setSubject(e.target.value)}
-              placeholder="Subject (optional)"
-            />
+            <div style={styles.subjectRow}>
+              <input
+                style={styles.subjectInput}
+                value={subject}
+                onChange={(e) => setSubject(e.target.value)}
+                placeholder="Subject (optional)"
+              />
+              <button
+                style={{ ...styles.voiceButton, ...(recording ? styles.voiceButtonActive : {}) }}
+                onClick={recording ? stopVoiceEntry : startVoiceEntry}
+                title={recording ? "Stop recording" : "Speak your entry"}
+              >
+                {recording ? <Square size={14} fill="currentColor" /> : <Mic size={14} />}
+              </button>
+            </div>
+            {(recording || transcribing) && (
+              <div style={styles.voiceStatus}>{recording ? "Listening…" : "Writing that down…"}</div>
+            )}
             <textarea
               style={styles.textarea}
               value={draft}
               onChange={(e) => setDraft(e.target.value)}
-              placeholder="Write whatever you need to get out…"
+              placeholder="Write whatever you need to get out, or tap the mic and say it instead…"
               rows={8}
             />
             <div style={styles.composerFooter}>
               <div style={{ display: "flex", gap: "8px", alignItems: "center" }}>
                 <CategoryDropdown value={composeCategory} onChange={setComposeCategory} includeAll={false} />
-                <motion.button
-                  style={styles.promptButton}
-                  whileHover={{ borderColor: theme.purple, color: theme.purpleBright }}
-                  whileTap={{ scale: 0.97 }}
-                  onClick={showRandomPrompt}
-                >
+                <button style={styles.promptButton} onClick={showRandomPrompt}>
                   <Sparkles size={13} /> Need a prompt?
-                </motion.button>
+                </button>
               </div>
-              <motion.button
-                style={styles.saveButton}
-                whileHover={{ scale: saving || !draft.trim() ? 1 : 1.03 }}
-                whileTap={{ scale: saving || !draft.trim() ? 1 : 0.97 }}
-                onClick={saveEntry}
-                disabled={saving || !draft.trim()}
-              >
+              <button style={styles.saveButton} onClick={saveEntry} disabled={saving || !draft.trim()}>
                 {saving ? "Saving…" : "Save entry"}
-              </motion.button>
+              </button>
             </div>
           </div>
-        </motion.div>
+        </div>
 
-        <motion.div variants={fadeUp} style={styles.entriesColumn}>
+        <div style={styles.entriesColumn}>
           <div style={styles.controlsRow}>
             <CategoryDropdown value={categoryFilter} onChange={setCategoryFilter} includeAll={true} />
             <button
@@ -291,23 +315,52 @@ function JournalView({ apiBase }) {
 
           {loaded && visible.length === 0 && (
             <p style={styles.emptyState}>
-              {showArchived ? "No archived entries." : "Nothing here yet — your first one starts on the left."}
+              {showArchived ? "No archived entries." : "Nothing here yet, your first one starts on the left."}
             </p>
           )}
 
-          <motion.div
-            style={styles.entryGrid}
-            initial="hidden"
-            animate="visible"
-            variants={{ visible: { transition: { staggerChildren: 0.04 } } }}
-          >
-            {visible.map((entry) => (
-              <EntryCard key={entry.id} entry={entry} onToggleArchive={toggleArchive} onDelete={deleteEntry} />
-            ))}
-          </motion.div>
-        </motion.div>
+          <div style={styles.entryGrid}>
+            <AnimatePresence>
+              {visible.map((entry) => {
+                const meta = CATEGORY_META[entry.category] || CATEGORY_META.other;
+                const CategoryIcon = meta.Icon;
+                return (
+                  <motion.div
+                    key={entry.id}
+                    style={styles.entryCard}
+                    layout
+                    initial={{ opacity: 0, scale: 0.92 }}
+                    animate={{ opacity: 1, scale: 1 }}
+                    exit={{ opacity: 0, scale: 0.9 }}
+                    transition={{ duration: 0.22, ease: "easeOut" }}
+                  >
+                    <div style={styles.entryHeader}>
+                      <div style={{ ...styles.categoryChip, color: meta.color, borderColor: meta.color }}>
+                        <CategoryIcon size={12} />
+                        {meta.label}
+                      </div>
+                      <div style={styles.entryActions}>
+                        <button style={styles.iconButton} onClick={() => toggleArchive(entry.id, entry.archived)} title={entry.archived ? "Unarchive" : "Archive"}>
+                          {entry.archived ? <ArchiveRestore size={15} /> : <Archive size={15} />}
+                        </button>
+                        <button style={styles.iconButton} onClick={() => deleteEntry(entry.id)} title="Delete">
+                          <Trash2 size={15} />
+                        </button>
+                      </div>
+                    </div>
+                    <div style={styles.entryDate}>
+                      {new Date(entry.timestamp).toLocaleDateString(undefined, { weekday: "short", month: "short", day: "numeric" })}
+                    </div>
+                    {entry.subject && <div style={styles.entrySubject}>{entry.subject}</div>}
+                    <p style={styles.entryText}>{entry.text}</p>
+                  </motion.div>
+                );
+              })}
+            </AnimatePresence>
+          </div>
+        </div>
       </div>
-    </motion.div>
+    </div>
   );
 }
 
@@ -320,17 +373,25 @@ const styles = {
   sub: { color: theme.muted, fontSize: "14px", marginTop: "6px", marginBottom: "16px", lineHeight: 1.5 },
   promptBox: {
     display: "flex", alignItems: "center", gap: "8px", padding: "10px 14px", marginBottom: "12px",
-    borderRadius: "12px", backgroundColor: "rgba(155,107,255,0.1)", border: `1px solid ${theme.border}`, overflow: "hidden"
+    borderRadius: "12px", backgroundColor: "rgba(155,107,255,0.1)", border: `1px solid ${theme.border}`
   },
   promptText: { color: theme.cream, fontSize: "13px", fontStyle: "italic" },
   composer: {
     backgroundColor: theme.panel, border: `1px solid ${theme.border}`, borderRadius: "16px",
     padding: "16px", display: "flex", flexDirection: "column", gap: "10px"
   },
+  subjectRow: { display: "flex", alignItems: "center", gap: "8px", borderBottom: `1px solid ${theme.border}`, paddingBottom: "10px" },
   subjectInput: {
-    background: "transparent", border: "none", outline: "none", borderBottom: `1px solid ${theme.border}`,
-    color: theme.cream, fontFamily: theme.serif, fontSize: "16px", fontWeight: 600, padding: "4px 2px 10px"
+    flex: 1, background: "transparent", border: "none", outline: "none",
+    color: theme.cream, fontFamily: theme.serif, fontSize: "16px", fontWeight: 600, padding: "4px 2px"
   },
+  voiceButton: {
+    width: "30px", height: "30px", borderRadius: "50%", border: `1px solid ${theme.border}`,
+    backgroundColor: theme.bgElevated, color: theme.muted, display: "flex", alignItems: "center",
+    justifyContent: "center", cursor: "pointer", flexShrink: 0
+  },
+  voiceButtonActive: { backgroundColor: theme.crisis, borderColor: theme.crisis, color: "#fff" },
+  voiceStatus: { color: theme.purpleBright, fontSize: "11px", letterSpacing: "0.5px" },
   textarea: {
     resize: "vertical", backgroundColor: "transparent", border: "none", outline: "none",
     color: theme.cream, fontSize: "15px", lineHeight: 1.6, fontFamily: theme.sans, minHeight: "160px"

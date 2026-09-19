@@ -23,6 +23,7 @@ function defaultMemory() {
     visualFacts: [],
     lastMessageTimestamp: null,
     lastTopic: null,
+    topicLog: [],
     crisisFlag: null,
     moodLog: [],
     selfReportLog: [],
@@ -33,11 +34,6 @@ function defaultMemory() {
       formality: { casual: 0, neutral: 0, formal: 0 }
     }
   };
-}
-
-function updateLastTopic(memory, topic) {
-  if (!topic) return memory;
-  return { ...memory, lastTopic: { text: topic, timestamp: Date.now() } };
 }
 
 function loadMemory(userId) {
@@ -94,16 +90,32 @@ function addMoodEntry(memory, sentiment) {
   return { ...memory, moodLog };
 }
 
-function addSelfReport(memory, sentiment, note) {
-  const entry = { sentiment, note: note ? note.trim().slice(0, 300) : '', timestamp: Date.now() };
+// Sentiments are now an array (someone can check in as more than one thing
+// at once), stored as `sentiments`. Kept resilient to older single-value
+// entries saved before this change.
+function addSelfReport(memory, sentiments, note) {
+  const cleanSentiments = (Array.isArray(sentiments) ? sentiments : [sentiments]).filter(Boolean);
+  const entry = { sentiments: cleanSentiments, note: note ? note.trim().slice(0, 300) : '', timestamp: Date.now() };
   const selfReportLog = [...(memory.selfReportLog || []), entry].slice(-MAX_MOOD_LOG);
   return { ...memory, selfReportLog };
+}
+
+function getEntrySentiments(entry) {
+  if (Array.isArray(entry.sentiments)) return entry.sentiments;
+  if (entry.sentiment) return [entry.sentiment];
+  return [];
+}
+
+function isSameDay(timestamp) {
+  const d = new Date(timestamp);
+  const now = new Date();
+  return d.toDateString() === now.toDateString();
 }
 
 function getMoodTrendLine(memory) {
   const sevenDaysAgo = Date.now() - 7 * 24 * 60 * 60 * 1000;
   const recent = memory.moodLog.filter(m => m.timestamp >= sevenDaysAgo);
-  if (recent.length < 6) return '';
+  if (recent.length < 4) return '';
   const counts = {};
   recent.forEach(m => { counts[m.sentiment] = (counts[m.sentiment] || 0) + 1; });
   const negative = (counts.anxious || 0) + (counts.sad || 0) + (counts.angry || 0);
@@ -113,6 +125,21 @@ function getMoodTrendLine(memory) {
     return `This person has seemed more ${dominant} than usual over the past several days, based on the pattern of the conversation. Notice it out loud if it feels natural, like something a person paying attention would say, not a clinical observation.`;
   }
   return '';
+}
+
+// This is the fast-calibration piece: a direct check-in is worth more,
+// immediately, than several inferred data points, so this doesn't wait on
+// any volume threshold, one check-in today is enough to use it.
+function getSelfReportLine(memory) {
+  const log = memory.selfReportLog || [];
+  if (log.length === 0) return '';
+  const latest = log[log.length - 1];
+  if (!isSameDay(latest.timestamp)) return '';
+  const tags = getEntrySentiments(latest);
+  if (tags.length === 0) return '';
+  const tagText = tags.length === 1 ? tags[0] : `a mix of ${tags.join(' and ')}`;
+  const noteClause = latest.note ? `, and added in their own words: "${latest.note}"` : '';
+  return `Earlier today, this person checked in on how they're feeling and described themselves as ${tagText}${noteClause}. Near the start of this conversation, acknowledge that once, naturally, the way a person would ask "hey, how's it going" or reference it lightly, whichever actually fits. If they engage and want to talk about it, follow wherever they take it and let the whole conversation carry that vibe. If they brush past it, change the subject, or clearly don't want to get into it, drop it completely and move on like a normal conversation, don't circle back to it later. This only comes up once, near the start, never repeated within the same conversation.`;
 }
 
 function updateStyle(memory, classification) {
@@ -134,7 +161,7 @@ function updateStyle(memory, classification) {
 
 function getStyleLine(memory) {
   const { totalMessages, length, humorCount, formality } = memory.styleProfile;
-  if (totalMessages < 8) return '';
+  if (totalMessages < 4) return '';
   const bits = [];
   if (length.short / totalMessages >= 0.5) {
     bits.push("this person tends to send short, blunt messages, don't over-explain or write long paragraphs back, match their pace");
@@ -176,8 +203,15 @@ function getTimeGapLine(lastTimestamp, username, lastTopic) {
   return line;
 }
 
+function updateLastTopic(memory, topic) {
+  if (!topic) return memory;
+  const topicLog = [...(memory.topicLog || []), { text: topic, timestamp: Date.now() }].slice(-40);
+  return { ...memory, lastTopic: { text: topic, timestamp: Date.now() }, topicLog };
+}
+
 function buildMemoryBlock(memory, checkInNote = '', username = null, journalSummaryLine = '') {
   const gapLine = getTimeGapLine(memory.lastMessageTimestamp, username, memory.lastTopic);
+  const selfReportLine = getSelfReportLine(memory);
   const factsLine = memory.facts.length
     ? `Things you already know about this person from earlier conversations: ${memory.facts.slice(-30).join('; ')}.`
     : '';
@@ -187,7 +221,7 @@ function buildMemoryBlock(memory, checkInNote = '', username = null, journalSumm
   const styleLine = getStyleLine(memory);
   const moodLine = getMoodTrendLine(memory);
 
-  return `\n\n${gapLine}\n${checkInNote}\n${factsLine}\n${journalSummaryLine}\n${visualLine}\n${styleLine}\n${moodLine}\nThis is background for understanding them, not a script or a set of guesses to offer. Don't treat any of the facts above as hypotheses to float when they seem vague or off, don't guess twice in a row, and don't bring up anything that sounded heavy or painful unless they bring it up first. What you know about their journal is held to an even stricter version of that rule, you genuinely know it exists and roughly what's in it, but never raise it unprompted, only engage with it if they bring it up themselves. Don't recite this list or announce that you "remember" things like a feature, just talk like someone who actually knows them, quietly, in the background.`;
+  return `\n\n${gapLine}\n${checkInNote}\n${selfReportLine}\n${factsLine}\n${journalSummaryLine}\n${visualLine}\n${styleLine}\n${moodLine}\nThis is background for understanding them, not a script or a set of guesses to offer. Don't treat any of the facts above as hypotheses to float when they seem vague or off, don't guess twice in a row, and don't bring up anything that sounded heavy or painful unless they bring it up first. What you know about their journal is held to an even stricter version of that rule, you genuinely know it exists and roughly what's in it, but never raise it unprompted, only engage with it if they bring it up themselves. Don't recite this list or announce that you "remember" things like a feature, just talk like someone who actually knows them, quietly, in the background.`;
 }
 
 module.exports = {

@@ -152,13 +152,14 @@ app.get('/api/mood-history', (req, res) => {
 app.post('/api/self-report', (req, res) => {
   try {
     const userId = getUserId(req);
-    const { sentiment, note } = req.body;
+    const { sentiments, note } = req.body;
     const validSentiments = ['calm', 'anxious', 'sad', 'hopeful', 'angry'];
-    if (!validSentiments.includes(sentiment)) {
-      return res.status(400).json({ error: 'A valid sentiment is required' });
+    const cleanList = Array.isArray(sentiments) ? sentiments.filter((s) => validSentiments.includes(s)) : [];
+    if (cleanList.length === 0) {
+      return res.status(400).json({ error: 'At least one valid feeling is required' });
     }
     const memory = loadMemory(userId);
-    const updated = addSelfReport(memory, sentiment, note);
+    const updated = addSelfReport(memory, cleanList, note);
     saveMemory(userId, updated);
     res.json({ success: true });
   } catch (error) {

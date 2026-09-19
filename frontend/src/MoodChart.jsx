@@ -1,6 +1,5 @@
 import { useEffect, useState } from 'react';
 import { theme } from '../theme';
-import { getOrCreateUserId } from '../utils/userId';
 
 const SENTIMENT_COLORS = {
   calm: 'var(--accent-purple)',
@@ -12,15 +11,23 @@ const SENTIMENT_COLORS = {
 
 const SENTIMENT_Y = { angry: 0, sad: 1, anxious: 2, calm: 3, hopeful: 4 };
 
+function getEntrySentiments(entry) {
+  if (Array.isArray(entry.sentiments)) return entry.sentiments;
+  if (entry.sentiment) return [entry.sentiment];
+  return [];
+}
+
 function MoodChart({ apiBase = 'http://localhost:5000' }) {
   const [moodLog, setMoodLog] = useState([]);
+  const [selfReportLog, setSelfReportLog] = useState([]);
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
-    fetch(`${apiBase}/api/mood-history`, { headers: { 'X-User-Id': getOrCreateUserId() } })
+    fetch(`${apiBase}/api/mood-history`)
       .then((res) => res.json())
       .then((data) => {
         setMoodLog(data.moodLog || []);
+        setSelfReportLog(data.selfReportLog || []);
         setLoading(false);
       })
       .catch(() => setLoading(false));
@@ -39,7 +46,7 @@ function MoodChart({ apiBase = 'http://localhost:5000' }) {
 
   if (loading) return <div style={containerStyle} />;
 
-  if (moodLog.length < 3) {
+  if (moodLog.length < 2) {
     return (
       <div style={{ ...containerStyle, display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
         <p style={{ color: theme.mutedDim, fontSize: '13px', margin: 0 }}>
@@ -65,7 +72,9 @@ function MoodChart({ apiBase = 'http://localhost:5000' }) {
 
   return (
     <div style={containerStyle}>
-      <div style={{ fontSize: '13px', marginBottom: '10px', color: theme.muted }}>Mood over recent conversations</div>
+      <div style={{ fontSize: '13px', marginBottom: '10px', color: theme.muted }}>
+        Mood over recent conversations <span style={{ color: theme.mutedDim, fontSize: '11px' }}>(Aria's read)</span>
+      </div>
       <svg width="100%" viewBox={`0 0 ${width} ${height}`}>
         <path d={linePath} fill="none" stroke={theme.purple} strokeWidth="2" opacity="0.6" />
         {points.map((p, i) => (
@@ -80,6 +89,33 @@ function MoodChart({ apiBase = 'http://localhost:5000' }) {
           </div>
         ))}
       </div>
+
+      {selfReportLog.length > 0 && (
+        <div style={{ marginTop: '16px', paddingTop: '14px', borderTop: `1px solid ${theme.border}` }}>
+          <div style={{ fontSize: '12px', color: theme.muted, marginBottom: '10px' }}>Your own check-ins, in your own words</div>
+          <div style={{ display: 'flex', gap: '14px', flexWrap: 'wrap' }}>
+            {selfReportLog.slice(-8).reverse().map((entry, i) => {
+              const tags = getEntrySentiments(entry);
+              return (
+                <div key={i} style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: '4px', maxWidth: '90px' }}>
+                  <div style={{ display: 'flex', gap: '2px' }}>
+                    {tags.map((s, j) => (
+                      <div key={j} style={{
+                        width: '10px', height: '10px', borderRadius: '50%',
+                        background: SENTIMENT_COLORS[s] || theme.muted,
+                        boxShadow: `0 0 0 2px ${theme.bg}, 0 0 0 3px ${SENTIMENT_COLORS[s] || theme.muted}`
+                      }} />
+                    ))}
+                  </div>
+                  <span style={{ fontSize: '10px', color: theme.mutedDim, textAlign: 'center' }}>
+                    {new Date(entry.timestamp).toLocaleDateString(undefined, { month: 'short', day: 'numeric' })}
+                  </span>
+                </div>
+              );
+            })}
+          </div>
+        </div>
+      )}
     </div>
   );
 }
